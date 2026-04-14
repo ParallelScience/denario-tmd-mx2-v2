@@ -1,0 +1,7 @@
+Classifier: Step 1 — Determining archive...
+  Archive: cond-mat — The paper focuses on the computational materials science of transition-metal dichalcogenides, which is a core topic within condensed matter physics.
+Classifier: Step 2 — Determining subcategory within 'cond-mat'...
+  Primary: cond-mat.mtrl-sci
+  Secondary: cs.LG, physics.comp-ph
+  Justification: The paper focuses on the mechanical properties and structural stability of transition-metal dichalcogenides (TMDs), which is a core topic in materials science. The use of machine learning (Random Forest, Deep Ensembles) for property prediction and screening justifies the inclusion of computer science and computational physics categories.
+Classification completed in 0 min 4 sec. Cost: $0.0000

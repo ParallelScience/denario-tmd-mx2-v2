@@ -1,0 +1,8 @@
+{
+  "primary_category": "cond-mat.mtrl-sci",
+  "secondary_categories": [
+    "cs.LG",
+    "physics.comp-ph"
+  ],
+  "justification": "The paper focuses on the mechanical properties and structural stability of transition-metal dichalcogenides (TMDs), which is a core topic in materials science. The use of machine learning (Random Forest, Deep Ensembles) for property prediction and screening justifies the inclusion of computer science and computational physics categories."
+}

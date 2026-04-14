@@ -1,0 +1,84 @@
+
+###### PROMPT BEGINS ########
+Human: You are a scientific paper classifier. Your task is to determine the most appropriate top-level arXiv archive for the following paper.
+
+**Paper Title:** Identifying Mechanically Robust Metastable Transition-Metal Dichalcogenides through Machine Learning and Electronic Descriptors
+
+**Abstract:** Metastable materials, particularly transition-metal dichalcogenides (TMDs), offer access to unique electronic and catalytic properties not found in their ground-state counterparts, but their practical synthesis is often thwarted by inherent mechanical fragility. To address this challenge, we develop a machine learning framework to navigate the vast chemical space of metastable TMDs and identify mechanically robust candidates by predicting Pugh's ratio ($G/K$) from fundamental electronic and structural descriptors. Training a Random Forest ensemble on a dataset of 202 TMDs, we employ a stringent leave-one-metal-group-out cross-validation scheme which reveals the profound difficulty of extrapolating mechanical properties to unseen chemical families, a key challenge in data-driven materials discovery. Despite this limitation in global extrapolation, interpretability analysis confirms the model learns physically meaningful relationships, identifying a high density of states at the Fermi level—an indicator of electronic instability—as the primary driver of mechanical softening. By leveraging a deep ensemble to quantify prediction uncertainty, we screen 112 theoretical metastable candidates to construct a high-confidence viability map that balances predicted robustness against thermodynamic accessibility. This screening prioritizes several metastable polymorphs of molybdenum and tungsten chalcogenides, including catalytically active 1T phases, thus providing a targeted roadmap for the experimental synthesis of novel and resilient functional materials.
+
+**Archives:**
+- astro-ph: Astrophysics — cosmology, galaxies, stellar physics, planetary science, high-energy astrophysics, instrumentation
+- cond-mat: Condensed Matter — materials science, superconductivity, quantum gases, soft matter, statistical mechanics
+- cs: Computer Science — AI, machine learning, NLP, computer vision, algorithms, networking, security, software
+- econ: Economics — econometrics, general economics, theoretical economics
+- eess: Electrical Engineering and Systems Science — signal processing, image/video processing, audio/speech, control
+- gr-qc: General Relativity and Quantum Cosmology — gravitational physics, gravitational waves, black holes
+- hep-ex: High Energy Physics - Experiment — particle physics experiments, collider results
+- hep-lat: High Energy Physics - Lattice — lattice field theory, lattice QCD
+- hep-ph: High Energy Physics - Phenomenology — theoretical particle physics connected to experiment
+- hep-th: High Energy Physics - Theory — string theory, quantum field theory, supersymmetry
+- math: Mathematics — algebra, geometry, topology, analysis, probability, number theory, optimization
+- math-ph: Mathematical Physics — mathematical methods for physics problems
+- nlin: Nonlinear Sciences — chaos, pattern formation, solitons, integrable systems, self-organization
+- nucl-ex: Nuclear Experiment — experimental nuclear physics
+- nucl-th: Nuclear Theory — nuclear structure theory, hadron models, neutron stars
+- physics: Physics (General) — classical, computational, fluid dynamics, optics, plasma, applied, biological, chemical physics
+- q-bio: Quantitative Biology — biomolecules, genomics, neuroscience, populations, quantitative methods
+- q-fin: Quantitative Finance — computational finance, portfolio management, risk, pricing, trading
+- quant-ph: Quantum Physics — quantum information, computation, entanglement, foundations, optics
+- stat: Statistics — methodology, applications, machine learning (with statistical grounding), computation
+
+Select the single most appropriate archive for this paper. If the paper spans multiple fields, choose the one where the paper makes its primary contribution.
+
+###### PROMPT ENDS ########
+
+archive='cond-mat' justification='The paper focuses on the computational materials science of transition-metal dichalcogenides, which is a core topic within condensed matter physics.'
+###### PROMPT BEGINS ########
+Human: You are a scientific paper classifier. You have already determined that this paper belongs to the **cond-mat** archive on arXiv. Now select the specific subcategory.
+
+**Paper Title:** Identifying Mechanically Robust Metastable Transition-Metal Dichalcogenides through Machine Learning and Electronic Descriptors
+
+**Abstract:** Metastable materials, particularly transition-metal dichalcogenides (TMDs), offer access to unique electronic and catalytic properties not found in their ground-state counterparts, but their practical synthesis is often thwarted by inherent mechanical fragility. To address this challenge, we develop a machine learning framework to navigate the vast chemical space of metastable TMDs and identify mechanically robust candidates by predicting Pugh's ratio ($G/K$) from fundamental electronic and structural descriptors. Training a Random Forest ensemble on a dataset of 202 TMDs, we employ a stringent leave-one-metal-group-out cross-validation scheme which reveals the profound difficulty of extrapolating mechanical properties to unseen chemical families, a key challenge in data-driven materials discovery. Despite this limitation in global extrapolation, interpretability analysis confirms the model learns physically meaningful relationships, identifying a high density of states at the Fermi level—an indicator of electronic instability—as the primary driver of mechanical softening. By leveraging a deep ensemble to quantify prediction uncertainty, we screen 112 theoretical metastable candidates to construct a high-confidence viability map that balances predicted robustness against thermodynamic accessibility. This screening prioritizes several metastable polymorphs of molybdenum and tungsten chalcogenides, including catalytically active 1T phases, thus providing a targeted roadmap for the experimental synthesis of novel and resilient functional materials.
+
+**Methods (if available):** \subsection{Dataset and feature engineering}
+The foundation of our study is a dataset comprising 202 transition-metal dichalcogenides (TMDs), for which structural and electronic properties were pre-computed. The primary target variable for our machine learning model is Pugh's ratio, defined as the ratio of the shear modulus to the bulk modulus ($G/K$). We use the Voigt-Reuss-Hill (VRH) averages for both moduli, yielding the target variable $G_{vrh}/K_{vrh}$. Elastic tensor data required to compute this ratio were available for a subset of 90 materials.
+
+The model was trained on a set of physically-motivated descriptors designed to capture the key drivers of mechanical stability. These features include: the density of states at the Fermi level (\texttt{dos\_at\_fermi}), which quantifies the metallic character of the material; the ratio of the out-of-plane to in-plane lattice parameters (\texttt{c\_a\_ratio}), which describes structural anisotropy; the d-band filling of the transition metal (\texttt{d\_band\_filling}); and a proxy for spin-orbit coupling effects (\texttt{M\_soc\_proxy}), taken as the square of the transition metal's atomic number, $Z^2$. Categorical features representing the crystal phase (e.g., 1T, 2H, 3R) were one-hot encoded.
+
+A small fraction of the dataset (16 materials) was missing values for \texttt{dos\_at\_fermi}. We handled this using mean imputation, where the missing values were filled with the mean of the feature calculated strictly from the training data within each cross-validation fold. An alternative strategy, which involved adding a binary indicator variable (\texttt{is\_dos\_missing}) to flag imputed samples, was tested but ultimately discarded as it slightly degraded model performance. Prior to screening, the dataset was filtered to remove 4 materials with extreme \texttt{dos\_at\_fermi} values (greater than three standard deviations from the mean) to prevent the model from extrapolating into unphysical, highly metallic regimes.
+
+\subsection{Machine learning model}
+Our modeling strategy initially explored a shallow neural network, but this approach failed to generalize, yielding a coefficient of determination ($R^2$) below 0.1 during preliminary cross-validation. We therefore pivoted to a Random Forest regressor, an ensemble method known for its robustness on small, tabular datasets with complex, non-linear feature interactions. The final model is an ensemble of decision trees trained to predict $G_{vrh}/K_{vrh}$ from the engineered electronic and structural descriptors.
+
+To provide robust uncertainty estimates for our predictions, we employed a Deep Ensemble technique. This involved training 10 independent Random Forest models, each initialized with a different random seed. The final prediction for a given material is the mean of the predictions from these 10 models, and the associated epistemic uncertainty is quantified by the standard deviation of these predictions.
+
+\subsection{Model evaluation and interpretability}
+The model's ability to extrapolate to new chemical families was rigorously assessed using a Leave-One-Group-Out (LOGO) cross-validation scheme. In this procedure, the dataset was partitioned into groups based on the transition metal element. For each fold, the model was trained on all groups except one, which was held out as the test set. This stringent protocol tests the model's capacity to predict the mechanical properties of TMDs containing a metal it has never seen during training. Model performance was quantified using the Mean Absolute Error (MAE) and the coefficient of determination ($R^2$).
+
+To gain physical insight into the model's decision-making process, we employed SHapley Additive exPlanations (SHAP). This technique assigns an importance value to each feature for every individual prediction, revealing not only which features are most influential overall but also how they interact to drive the predicted outcome. The SHAP analysis was performed on the model trained on the full 90-sample subset containing elastic data.
+
+\subsection{Screening and candidate prioritization}
+The trained Deep Ensemble model was used to screen a library of 112 theoretical metastable TMDs. To rank these candidates and identify the most promising targets for synthesis, we defined a composite viability score, $S$, which balances predicted robustness with prediction confidence:
+\begin{equation}
+S = \frac{\text{Predicted}(G/K)}{\text{Uncertainty}}
+\end{equation}
+where the uncertainty is the standard deviation of the ensemble's predictions. This score prioritizes materials predicted to have a high Pugh's ratio with low disagreement among the ensemble models.
+
+The final list of prioritized candidates was generated by applying a filter to this ranked list. We selected only materials that were designated as purely theoretical and possessed a thermodynamic accessibility within a realistic window for experimental synthesis, defined as having an energy above the convex hull ($E_{hull}$) of 0.05 eV/atom or less.
+
+**Available subcategories in cond-mat:**
+- cond-mat.dis-nn: Disordered Systems and Neural Networks — Glasses and spin glasses; properties of random, aperiodic and quasiperiodic systems; transport in disordered media; localization; neural networks.
+- cond-mat.mes-hall: Mesoscale and Nanoscale Physics — Semiconducting nanostructures: quantum dots, wires, and wells. Single electronics, spintronics, 2D electron systems, quantum Hall effect, nanotubes, graphene.
+- cond-mat.mtrl-sci: Materials Science — Techniques, synthesis, characterization, structure. Structural phase transitions, mechanical properties, phonons, defects.
+- cond-mat.other: Other Condensed Matter — Work addressing condensed matter topics not fitting other condensed matter classifications.
+- cond-mat.quant-gas: Quantum Gases — Ultracold atomic and molecular gases, Bose-Einstein condensation, Feshbach resonances, atom-molecule mixtures, quantum simulations.
+- cond-mat.soft: Soft Condensed Matter — Membranes, polymers, liquid crystals, glasses, colloids, granular matter, foams, biological physics.
+- cond-mat.stat-mech: Statistical Mechanics — Phase transitions, thermodynamics, field theory, non-equilibrium phenomena, renormalization group, percolation, exactly solvable models.
+- cond-mat.str-el: Strongly Correlated Electrons — Quantum magnetism, non-Fermi liquids, spin liquids, quantum criticality, heavy fermions, Kondo physics, Mott transition.
+- cond-mat.supr-con: Superconductivity — Superconductivity: theory, models, experiment. Superflow in helium. High-temperature superconductors.
+
+Select one primary subcategory and up to 3 secondary subcategories (from any archive) that also apply. The primary must be from the list above. Secondary categories may come from any arXiv category if the paper is interdisciplinary.
+
+###### PROMPT ENDS ########
+
+primary_category='cond-mat.mtrl-sci' secondary_categories=['cs.LG', 'physics.comp-ph'] justification='The paper focuses on the mechanical properties and structural stability of transition-metal dichalcogenides (TMDs), which is a core topic in materials science. The use of machine learning (Random Forest, Deep Ensembles) for property prediction and screening justifies the inclusion of computer science and computational physics categories.'
