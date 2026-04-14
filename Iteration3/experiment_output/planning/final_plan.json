@@ -1,0 +1,92 @@
+{
+    "sub_tasks": [
+        {
+            "bullet_points": [
+                "Load the dataset from the provided path.",
+                "Perform KNN-imputation for the 16 missing dos_at_fermi values.",
+                "Create a binary indicator feature is_dos_missing.",
+                "Apply one-hot encoding to phase, crystal_system, and magnetic_ordering.",
+                "Standardize all continuous features using robust scaling (median/IQR).",
+                "Compare the distribution of imputed dos_at_fermi values against the 186 known values (histogram/KDE) and print summary statistics (mean, median, std) to verify physical plausibility.",
+                "Save the processed dataframe to a CSV file."
+            ],
+            "sub_task": "Impute missing dos_at_fermi values, encode categorical variables, and standardize continuous features.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Calculate the median G_vrh of the stable population to define the initial is_robust threshold.",
+                "Compute the is_robust target for the 90 samples with elastic data.",
+                "Perform sensitivity analysis by varying the threshold between the 60th and 80th percentiles of the stable population's G_vrh.",
+                "Generate a visualization showing how class balance and the size of the \"high-confidence\" set change with the threshold.",
+                "Print exact threshold values, class counts, and the list of high-confidence material IDs at each percentile step.",
+                "Save the results and target labels to disk."
+            ],
+            "sub_task": "Define the is_robust target and analyze its sensitivity to the robustness threshold.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Restrict training/CV to the 90 samples with non-missing G_vrh.",
+                "Train a Random Forest classifier using LOCO cross-validation (grouping by transition metal).",
+                "Apply class weight balancing.",
+                "Print per-fold AUPRC, AUROC, and F1 scores for each held-out metal group, plus macro-averaged metrics.",
+                "Save the trained model and performance metrics."
+            ],
+            "sub_task": "Train a Random Forest classifier to predict is_robust using LOCO cross-validation.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Train four model configurations: (a) full set, (b) no M_soc_proxy, (c) no dos_at_fermi, (d) no both.",
+                "Use the same LOCO cross-validation scheme as Step 3.",
+                "Print a comparison table of AUPRC for all configurations.",
+                "Explicitly state whether the performance drop from removing M_soc_proxy is statistically negligible.",
+                "Save the ablation results."
+            ],
+            "sub_task": "Evaluate the impact of M_soc_proxy and dos_at_fermi on model performance.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Calculate KNN distance of metastable candidates to the 5 nearest neighbors in the stable training set using the standardized feature matrix (excluding one-hot columns).",
+                "Flag candidates with distances exceeding the 95th percentile as OOD.",
+                "Print the number of OOD candidates, their IDs/formulas, and the 95th percentile threshold.",
+                "Generate a t-SNE projection colored by \"Stable,\" \"Metastable-Robust,\" and \"Metastable-OOD.\"",
+                "Save the OOD flags and the plot."
+            ],
+            "sub_task": "Identify OOD candidates and generate a 2D projection of the feature space.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Calculate SHAP values for the trained Random Forest model.",
+                "Generate summary plots for feature importance.",
+                "Create a dedicated scatter plot of SHAP interaction values between d_band_filling and dos_at_fermi for Ni-based TMDs, colored by is_robust.",
+                "Print Ni-based TMD material IDs, predicted probabilities, d_band_filling, and dos_at_fermi values.",
+                "Save SHAP values and plots."
+            ],
+            "sub_task": "Analyze feature importance and interaction effects using SHAP.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Apply the model trained in Step 3 to the 112 metastable candidates.",
+                "Rank candidates by predicted probability of being is_robust (>0.75).",
+                "Filter out OOD candidates.",
+                "Save the final prioritized list of candidates to a CSV file."
+            ],
+            "sub_task": "Rank and filter metastable candidates for experimental synthesis.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Synthesize all quantitative results: median G_vrh threshold, LOCO CV metrics (mean/per-fold), ablation AUPRC table, OOD counts/identities, and top-ranked candidates.",
+                "Interpret SHAP analysis and the role of electronic descriptors in mechanical robustness.",
+                "Discuss implications for experimental synthesis and provide a comprehensive summary."
+            ],
+            "sub_task": "Write the full Results section of the report.",
+            "sub_task_agent": "researcher"
+        }
+    ]
+}
