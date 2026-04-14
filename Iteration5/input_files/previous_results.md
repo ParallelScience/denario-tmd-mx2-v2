@@ -1,0 +1,71 @@
+# Mechanical Viability and Target Formulation
+
+The primary objective of this study was to identify metastable Transition-Metal Dichalcogenides (TMDs) that exhibit mechanical robustness, specifically targeting materials with high shear moduli ($G_{vrh}$). To achieve this without directly regressing continuous elastic constants on a limited dataset, a composite Mechanical Viability score ($V_{score}$) was constructed. This score balances the percentile rank of the shear modulus against a thermodynamic penalty, defined as $V_{score} = \text{percentile}(G_{vrh}) \times \exp(-\alpha \cdot \text{energy\_above\_hull})$. 
+
+The decay constant $\alpha$ was rigorously calibrated by scanning the range [0, 50] to maximize the Welch's t-test statistic between the $V_{score}$ distributions of thermodynamically stable and metastable materials. The optimal value was determined to be $\alpha = 50.0$, which yielded a maximum t-statistic of 6.1034. This strong exponential decay ensures that thermodynamic instability heavily discounts mechanical robustness, reflecting the physical reality that highly metastable phases are prone to shear-driven structural collapse.
+
+The binary classification target, `is_viable`, was established using the median $V_{score}$ of the stable population as a threshold, which was calculated to be 0.6111. To ensure that the identified candidates remain within the realm of experimental synthesizability, a strict thermodynamic cutoff was applied, requiring the `energy_above_hull` to be $\le 0.1$ eV/atom. Applying these criteria to the 90 materials with available elastic data resulted in 23 viable materials. This viable subset comprises 17 thermodynamically stable materials and 6 metastable materials, establishing a rigorous, physically grounded baseline for training the classification model.
+
+# Missing Data Analysis and Feature Selection
+
+An analysis of the dataset revealed that 16 materials lacked computed density of states at the Fermi level (`dos_at_fermi`). To determine if this missingness introduced selection bias, a Mann-Whitney U test was conducted. While the distribution of `energy_above_hull` did not significantly differ between the missing and present groups (U = 1683.5, p = 0.3832), a highly significant difference was observed for `volume_per_atom` (U = 2250.5, p = 0.00068). This indicates a structural selection bias within the Materials Project database, where DOS calculations are systematically absent for materials with specific atomic volumes. 
+
+To address this non-random missingness, an explicit binary indicator feature (`is_dos_missing`) was introduced, and the missing continuous values were imputed using the 5th percentile of the observed data to avoid outlier distortion. A comparative evaluation of Random Forest models demonstrated that including the indicator slightly improved the cross-validation ROC-AUC from 0.8504 to 0.8552. Consequently, the indicator was retained in the feature set, exhibiting a baseline feature importance of 0.0038.
+
+A Variance Inflation Factor (VIF) analysis was subsequently performed to assess multicollinearity among the continuous elemental and electronic features. The analysis revealed severe collinearity, with several features—including `M_val`, `M_en`, `M_group`, `M_atomic_radius`, `X_period`, `X_atomic_radius`, `X_ie1`, `X_en`, `en_difference`, `bond_radius_sum`, `d_count_m4plus`, and `d_band_filling`—exhibiting infinite VIFs. Other features also showed extreme inflation, such as `M_Z` (79260.94), `M_soc_proxy` (24627.74), `M_period` (18272.85), and `M_ie1` (14.44).
+
+To mitigate this collinearity and prevent model overfitting, Recursive Feature Elimination with Cross-Validation (RFECV) was employed. Targeting a parsimonious subset of 6 to 10 features, the algorithm converged on an optimal set of exactly 7 features. Notably, `d_band_filling`, initially hypothesized to be a primary driver of mechanical stability, was pruned during this process. This suggests that the variance associated with fractional d-band filling is redundantly encoded in the retained structural and elemental features, allowing the model to map the electronic phase space implicitly.
+
+# Model Performance and Cross-Validation
+
+A Random Forest classifier was trained using the 7 features selected by RFECV. To ensure the model's generalizability across distinct chemical spaces and to prevent data leakage between structurally similar compounds, a Leave-One-Group-Out (LOGO) cross-validation strategy was implemented. The data was grouped by the transition metal's periodic table group (`M_group`), spanning Groups 4 through 10.
+
+The sample distribution across these groups was highly imbalanced: Group 4 (13 samples), Group 5 (37), Group 6 (24), Group 7 (4), Group 8 (4), Group 9 (5), and Group 10 (3). To address class imbalance within the training folds, Synthetic Minority Over-sampling Technique (SMOTE) or RandomOverSampler (for extremely small minority classes) was applied dynamically.
+
+The LOGO cross-validation yielded an average ROC-AUC of 0.7333 and an average Balanced Accuracy of 0.6729. The fold-specific performance metrics highlight the model's behavior across different regions of the periodic table:
+- **Fold 1 (Left out Group 4):** ROC-AUC = NaN (only one class present in the test set), Balanced Accuracy = 1.0000
+- **Fold 2 (Left out Group 5):** ROC-AUC = 0.8360, Balanced Accuracy = 0.6667
+- **Fold 3 (Left out Group 6):** ROC-AUC = 0.6639, Balanced Accuracy = 0.7101
+- **Fold 4 (Left out Group 7):** ROC-AUC = 0.3333, Balanced Accuracy = 0.6667
+- **Fold 5 (Left out Group 8):** ROC-AUC = 1.0000, Balanced Accuracy = 0.5000
+- **Fold 6 (Left out Group 9):** ROC-AUC = 0.8333, Balanced Accuracy = 0.5000
+- **Fold 7 (Left out Group 10):** ROC-AUC = NaN, Balanced Accuracy = 0.6667
+
+The robust performance on the larger, more diverse groups (e.g., Group 5, ROC-AUC = 0.8360) demonstrates the model's capability to learn meaningful electronic-mechanical relationships. Conversely, the degradation in performance on smaller, chemically distinct groups (e.g., Group 7) underscores the inherent challenge of extrapolating mechanical properties across the periodic table when training data is sparse.
+
+# Physical Drivers of Mechanical Robustness
+
+The physical mechanisms driving mechanical viability were investigated through statistical testing and SHAP (SHapley Additive exPlanations) analysis. A critical component of the feature space is the interplay between heavy-element relativistic effects and magnetic ordering. A Kruskal-Wallis test was conducted to evaluate the relationship between the spin-orbit coupling proxy (`M_soc_proxy`, defined as $Z^2$) and the DFT-relaxed `magnetic_ordering` (NM, FM, FiM, AFM). The test yielded an H-statistic of 8.1565 with a p-value of 0.0429, indicating a statistically significant correlation. 
+
+This correlation is physically profound. Heavy transition metals (higher Z) typically exhibit stronger spin-orbit coupling, which can lift orbital degeneracies and suppress localized magnetic moments, favoring non-magnetic states. Conversely, lighter 3d metals (e.g., Fe, Co, Ni) possess weaker SOC but stronger electron-electron correlation, leading to robust ferromagnetic or antiferromagnetic orderings. The model's utilization of `M_soc_proxy` therefore captures a dual physical effect: direct relativistic band splitting and an inverse proxy for localized magnetic moments. This is vital for predicting mechanical viability, as magnetic exchange striction and Jahn-Teller distortions directly couple the electronic spin state to the lattice, frequently resulting in the softening of the shear modulus in metastable configurations.
+
+Furthermore, the exclusion of `d_band_filling` by the RFECV algorithm provides insight into the model's internal representation of the physics. While the filling of bonding versus antibonding d-orbitals dictates the cohesive energy and structural rigidity of the MX₂ framework, the high collinearity identified in the VIF analysis indicates that this information is not isolated. Instead, the mechanical softening associated with specific electronic fillings is indirectly captured by the remaining structural parameters (such as `volume_per_atom` and `c_a_ratio`) and elemental proxies. The model successfully maps the electronic phase space through a composite representation of structural responses rather than relying on a single explicit filling metric.
+
+# Out-of-Distribution Detection and the Synthesis Window
+
+To ensure the reliability of predictions on the 112 metastable candidates lacking elastic data, an Out-of-Distribution (OOD) detection protocol was executed. The Mahalanobis distance of each candidate to the centroid of the 90-sample training population was calculated using the physically foundational features `d_band_filling` and `en_difference`. The centroid of the training population was located at [0.1733, 0.7470]. 
+
+A strict 90th percentile distance threshold of 3.1116 was established. Candidates exceeding this distance were flagged as "chemically exotic." This rigorous filter identified and excluded 5 candidates, ensuring that the Random Forest classifier was not forced to extrapolate into unsupported, high-uncertainty regions of the chemical feature space.
+
+For the remaining non-exotic candidates, a Pareto front analysis was constructed to visualize the "synthesis window." This was achieved by plotting the thermodynamic penalty (`energy_above_hull`) against the `predicted_viability_probability`. The Pareto front delineates the optimal theoretical trade-off between thermodynamic accessibility (low energy above hull, acting as a proxy for synthesizability) and mechanical robustness (high predicted probability of exceeding the stable median shear modulus). Materials residing on or near this front in the upper-left quadrant represent the most promising targets, as they maximize mechanical viability while remaining close enough to the convex hull to be synthesized via non-equilibrium techniques without decomposing into competing phases.
+
+# Candidate Prioritization and Sensitivity Analysis
+
+The metastable candidates were ranked based on their predicted viability probability. A stringent initial filter was applied to isolate the most promising materials, requiring a predicted probability > 0.70 and an `energy_above_hull` < 0.05 eV/atom. This filter successfully narrowed the pool down to 6 highly promising candidates.
+
+To rigorously validate these predictions against potential artifacts arising from the training data distribution, a "leave-one-metal-out" sensitivity analysis was conducted. The model was iteratively retrained by entirely excluding all samples containing a specific transition metal (e.g., removing all Mo compounds, then all W compounds), and the probabilities for the 6 candidates were re-evaluated in each iteration. A candidate was flagged as "sensitivity-dependent" if its predicted probability dropped below the 0.70 threshold in any of the iterations. 
+
+This sensitivity analysis revealed that 4 of the 6 candidates were highly dependent on the presence of specific metals in the training set, indicating that their high scores were likely artifacts of localized chemical similarities rather than generalized mechanical robustness. After excluding these sensitivity-dependent materials, exactly 2 final, highly robust candidates remained:
+
+1. **mp-849059 (NiS₂):** Classified in the CDW/distorted phase with Antiferromagnetic (AFM) ordering. It exhibits an energy above hull of 0.0213 eV/atom and a highly robust predicted viability probability of 0.97. The prediction of high mechanical viability in a distorted AFM phase suggests that the charge-density-wave distortion may lock the lattice into a rigid configuration, preventing the shear-driven phase transitions common in other metastable TMDs.
+2. **mp-1009641 (CoTe₂):** Classified in the 1T phase with Non-magnetic (NM) ordering. It possesses an energy above hull of 0.0192 eV/atom and a predicted viability probability of 0.93. The 1T (octahedral) phase is typically metastable for group 9 metals. The non-magnetic state in a telluride suggests strong covalency in the Co-Te bonds, which likely contributes to the predicted high shear modulus, overcoming the typical mechanical softening associated with the 1T polymorph in late transition metals.
+
+Both candidates represent highly prioritized targets for experimental validation, possessing the requisite electronic signatures for high shear moduli while remaining thermodynamically accessible.
+
+# Limitations
+
+While the methodology provides a robust framework for screening metastable TMDs, several limitations must be acknowledged:
+
+- **Small Elastic Dataset:** The primary limitation of this study is the reliance on a restricted dataset of 90 materials with computed elastic constants. Although the LOGO cross-validation and leave-one-metal-out sensitivity analyses mitigate overfitting, the absolute diversity of the training data restricts the model's ability to learn universal mechanical rules across all 35 space groups present in the broader dataset.
+- **Selection Bias in the Database:** The Mann-Whitney U test confirmed a structural selection bias within the Materials Project database, where DOS calculations are preferentially missing for materials with specific atomic volumes. Although the inclusion of the `is_dos_missing` indicator partially addresses this algorithmically, the underlying bias may still skew the model's representation of the metastable phase space, potentially overlooking viable candidates in under-sampled volumetric regimes.
+- **DFT-Level Approximations:** The target variable ($G_{vrh}$) and all electronic features are derived from zero-Kelvin DFT calculations utilizing the PBE generalized-gradient approximation functional. These calculations inherently do not account for finite-temperature anharmonicity, which can significantly alter mechanical stability, particularly in metastable and CDW-distorted phases. Furthermore, the PBE functional may inadequately capture strong electron correlation effects in 3d transition metals (such as Ni and Co), potentially affecting the accuracy of the predicted electronic structures and magnetic ground states for the final prioritized candidates.

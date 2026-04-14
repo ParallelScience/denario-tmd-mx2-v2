@@ -1,0 +1,9 @@
+The analysis failures and limitations are directly attributable to the following dataset constraints:
+
+1. **Limited Sample Size for Elastic Properties**: The dataset description explicitly states that elastic constants (`K_vrh`, `G_vrh`, etc.) are available for only 90/202 materials because the Materials Project does not compute these for metastable structures. This constraint directly limits the training data for the "Mechanical Viability" target, leading to the reported degradation in model performance on chemically distinct groups and the need for sensitivity-dependent filtering of candidates.
+
+2. **Non-Random Missingness (Selection Bias)**: The dataset description notes that `dos_at_fermi` is missing for 16 materials. The analysis confirms this is not random, as the missingness is correlated with `volume_per_atom`. This constraint forces the use of an indicator feature (`is_dos_missing`) and imputation, which the analysis identifies as a source of potential skew in the representation of the metastable phase space.
+
+3. **Multicollinearity in Elemental Descriptors**: The dataset provides a large number of elemental descriptors (e.g., `M_val`, `M_group`, `M_atomic_radius`) that are fixed per element. The analysis identifies that these features exhibit extreme collinearity (infinite VIFs), which is a direct consequence of the dataset's curation—where these descriptors are derived from a limited set of 13 transition metals and 3 chalcogens, causing redundant information to propagate through the feature set.
+
+4. **DFT Approximation Constraints**: The dataset is restricted to PBE-level DFT calculations. The analysis correctly identifies that this constraint limits the physical accuracy of the model, as PBE may fail to capture strong electron correlation in 3d metals (Ni, Co) and lacks finite-temperature effects, which are critical for the mechanical stability of the metastable phases being studied.
