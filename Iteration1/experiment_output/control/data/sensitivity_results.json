@@ -1,0 +1,72 @@
+{
+    "per_fold": {
+        "Co": {
+            "auprc_base": 0.6791666666666667,
+            "auprc_sens": 0.6791666666666667,
+            "diff": 0.0
+        },
+        "Cr": {
+            "auprc_base": 1.0,
+            "auprc_sens": 1.0,
+            "diff": 0.0
+        },
+        "Fe": {
+            "auprc_base": null,
+            "auprc_sens": null,
+            "diff": null
+        },
+        "Hf": {
+            "auprc_base": null,
+            "auprc_sens": null,
+            "diff": null
+        },
+        "Mn": {
+            "auprc_base": 1.0,
+            "auprc_sens": 1.0,
+            "diff": 0.0
+        },
+        "Mo": {
+            "auprc_base": 0.7333333333333334,
+            "auprc_sens": 0.8928571428571428,
+            "diff": 0.1595238095238094
+        },
+        "Nb": {
+            "auprc_base": 0.31113498030791265,
+            "auprc_sens": 0.3682909196067091,
+            "diff": 0.057155939298796476
+        },
+        "Ni": {
+            "auprc_base": null,
+            "auprc_sens": null,
+            "diff": null
+        },
+        "Ta": {
+            "auprc_base": 0.8520408163265305,
+            "auprc_sens": 0.9093537414965986,
+            "diff": 0.05731292517006814
+        },
+        "Ti": {
+            "auprc_base": 0.6388888888888888,
+            "auprc_sens": 0.9166666666666665,
+            "diff": 0.2777777777777777
+        },
+        "V": {
+            "auprc_base": 0.8666666666666667,
+            "auprc_sens": 0.9166666666666665,
+            "diff": 0.04999999999999982
+        },
+        "W": {
+            "auprc_base": 0.7333333333333333,
+            "auprc_sens": 0.8541666666666666,
+            "diff": 0.12083333333333335
+        },
+        "Zr": {
+            "auprc_base": null,
+            "auprc_sens": null,
+            "diff": null
+        }
+    },
+    "pooled_base_auprc": 0.5997126419570886,
+    "pooled_sens_auprc": 0.7548188324144507,
+    "pooled_diff": 0.15510619045736207
+}

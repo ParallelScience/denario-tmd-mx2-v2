@@ -1,0 +1,76 @@
+{
+    "sub_tasks": [
+        {
+            "bullet_points": [
+                "Load the dataset and perform conditional imputation for `dos_at_fermi` (0 for semiconductors, KNN for metals).",
+                "Print summary statistics of the imputation (count of zero-set vs. KNN-imputed values, distribution of imputed values).",
+                "Encode categorical variables (`magnetic_ordering`, `phase`, `crystal_system`) and standardize continuous features.",
+                "Save the processed dataset to disk.",
+                "Note: KNN imputation must be fit only on training data within each LOMO fold in subsequent steps to avoid data leakage."
+            ],
+            "sub_task": "Data Preprocessing and Feature Engineering",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Filter the dataset to the 90-sample elastic subset where `G_vrh` is not NaN.",
+                "Calculate and print the median `G_vrh` threshold for the `is_robust` target definition.",
+                "Define the binary target `is_robust` (1 if `G_vrh` > median, else 0).",
+                "Construct LOMO CV indices based on the `metal` column strictly within the 90-sample subset.",
+                "Save the target labels and CV indices to disk."
+            ],
+            "sub_task": "Global Target Definition and Dataset Splitting",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Implement a nested LOMO loop: inner loop for hyperparameter optimization (`n_estimators`, `max_depth`, `min_samples_split`) and outer loop for evaluation.",
+                "Use AUPRC as the optimization metric and apply class weight balancing.",
+                "Print and save the best hyperparameters per fold and the per-fold AUPRC scores."
+            ],
+            "sub_task": "Model Training and Hyperparameter Optimization",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Compute Permutation Feature Importance on held-out fold data for each LOMO fold.",
+                "Aggregate importance scores across folds (mean and standard deviation per feature).",
+                "Perform sensitivity analysis by comparing models with and without `volume_per_atom`.",
+                "Print and save per-fold and aggregate AUPRC differences for the sensitivity analysis."
+            ],
+            "sub_task": "Feature Importance and Sensitivity Analysis",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Retrain the final model on all 90 elastic samples using the best hyperparameters identified in Step 3.",
+                "Compute the 90th-percentile threshold for `elastic_anisotropy` from the 90-sample training set.",
+                "Predict `is_robust` probability for the 112 metastable candidates and apply the `elastic_anisotropy` filter.",
+                "Rank candidates by probability and save the final list."
+            ],
+            "sub_task": "Mechanical Stability Filtering and Candidate Prioritization",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Generate a bar chart of permutation feature importances with error bars.",
+                "Create PDPs for the top 3 features.",
+                "Generate a scatter plot of predicted robustness probability vs. `d_band_filling` (colored by chalcogen) for metastable candidates.",
+                "Create a comparison histogram of `G_vrh` distributions for high-priority candidates vs. the stable population.",
+                "Save all plots to disk."
+            ],
+            "sub_task": "Visualization of Results",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Synthesize all quantitative results: median `G_vrh` threshold, per-fold/mean AUPRC, candidate counts, top-ranked features with statistics, and AUPRC gain from `volume_per_atom`.",
+                "Interpret the physical significance of top features (e.g., `d_band_filling`, `M_soc_proxy`) regarding Jahn-Teller distortions and spin-orbit coupling.",
+                "Discuss the implications of the candidate prioritization for experimental synthesis.",
+                "Write the full Results section of the report."
+            ],
+            "sub_task": "Final Results Reporting",
+            "sub_task_agent": "researcher"
+        }
+    ]
+}
