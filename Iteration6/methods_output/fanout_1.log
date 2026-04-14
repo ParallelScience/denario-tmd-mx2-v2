@@ -1,0 +1,326 @@
+
+###### PROMPT BEGINS ########
+Human: You are provided with:
+- a description of the data
+- an idea
+- research plan to carry out the idea.
+
+Your task is to provide suggestions on how to improve the plan.
+Take into account and potential feedback (if any).
+If the plan is already good enough, do not give suggestions to improve it. If this is not first iteration, you will also be provided with the previous research plan along with some feedback on it. If this is the case, take into account the feedback provided when designing the new research plan. It is good to have a detailed plan, but not to have an overly complicated plan. If you dont have suggestions, just say that you dont have further suggestions. The idea should remain the same. No need to add code to the research plan, as another agent will write code given the research plan.
+
+Data description:
+# Data Description: MX₂ Transition-Metal Dichalcogenides
+
+## Overview
+
+This dataset contains 202 binary MX₂ compounds (one transition metal M, one chalcogen X, in a 1:2 stoichiometric ratio) retrieved from the Materials Project database (https://materialsproject.org) using the `mp-api` Python client (v0.46.0). All values are the result of density functional theory (DFT) calculations performed by the Materials Project using the Vienna Ab initio Simulation Package (VASP) with the PBE generalized-gradient approximation exchange-correlation functional.
+
+The dataset covers 13 transition metals (M = Ti, Zr, Hf, V, Nb, Ta, Cr, Mo, W, Mn, Fe, Co, Ni) and 3 chalcogens (X = S, Se, Te), spanning 35 space groups and 7 crystal systems.
+
+---
+
+## File Location
+
+```
+/home/node/work/projects/materials_project_v1/tmd_data_enriched.csv
+```
+
+## Loading the Data
+
+```python
+import pandas as pd
+
+df = pd.read_csv("/home/node/work/projects/materials_project_v1/tmd_data_enriched.csv")
+print(df.shape)   # (202, 53)
+```
+
+No index column is stored. All columns are loaded directly.
+
+---
+
+## Column Descriptions
+
+### Identifiers
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `material_id` | str | Unique Materials Project identifier (e.g. `mp-27793`) |
+| `formula` | str | Reduced chemical formula (e.g. `NbSe2`, `MoS2`) |
+| `metal` | str | Transition metal element symbol (one of: Ti, Zr, Hf, V, Nb, Ta, Cr, Mo, W, Mn, Fe, Co, Ni) |
+| `chalcogen` | str | Chalcogen element symbol (one of: S, Se, Te) |
+
+### Crystal Structure
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `spacegroup_symbol` | str | — | Hermann-Mauguin space group symbol (e.g. `P6_3/mmc`, `P-3m1`) |
+| `spacegroup_number` | int | — | International space group number (1–230) |
+| `crystal_system` | str | — | Crystal system: Trigonal, Hexagonal, Orthorhombic, Cubic, Monoclinic, Tetragonal, or Triclinic |
+| `phase` | str | — | TMD polymorph classification derived from space group (see Phase Classification below) |
+| `volume` | float | Å³ | Total unit cell volume |
+| `nsites` | int | — | Number of atomic sites in the unit cell |
+| `volume_per_atom` | float | Å³/atom | Unit cell volume divided by number of sites |
+| `a`, `b`, `c` | float | Å | Lattice parameters (lengths) |
+| `alpha`, `beta`, `gamma` | float | degrees | Lattice parameters (angles) |
+| `c_a_ratio` | float | — | Ratio c/a of lattice parameters |
+
+### Thermodynamic Stability
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `energy_above_hull` | float | eV/atom | Energy above the convex hull. 0 = thermodynamically stable ground state; larger values indicate metastability |
+| `log1p_energy_above_hull` | float | — | log(1 + energy_above_hull); log-transformed stability for use in models |
+| `formation_energy_per_atom` | float | eV/atom | Formation energy per atom relative to elemental references; negative = exothermic formation |
+| `is_stable` | bool | — | True if the material lies on the convex hull (energy_above_hull = 0) |
+| `theoretical` | bool | — | True if the material has not been experimentally observed in the ICSD; False if it has been synthesized |
+
+### Electronic Structure
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `band_gap` | float | eV | DFT-computed electronic band gap. 0.0 = metallic |
+| `efermi` | float | eV | Fermi energy in the DFT calculation (absolute, not relative to VBM) |
+| `dos_at_fermi` | float | states/eV | Total electronic density of states at the Fermi level, computed from the DFT projected DOS. Missing for 16 materials where no DOS calculation is available in MP. |
+
+### Magnetic Properties
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `magnetic_ordering` | str | DFT-relaxed magnetic ground state: NM (non-magnetic), FM (ferromagnetic), AFM (antiferromagnetic), FiM (ferrimagnetic) |
+| `total_magnetization` | float | Total magnetic moment of the unit cell in μ_B |
+
+### Mechanical / Elastic Properties
+
+Available for 90/202 materials (only computed by MP for stable or near-stable structures).
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `K_vrh` | float | GPa | Bulk modulus (Voigt-Reuss-Hill average) |
+| `G_vrh` | float | GPa | Shear modulus (Voigt-Reuss-Hill average) |
+| `poisson_ratio` | float | — | Homogeneous Poisson ratio |
+| `elastic_anisotropy` | float | — | Universal elastic anisotropy index |
+| `debye_temperature` | float | K | Debye temperature, estimated from elastic constants |
+
+### Atomic / Elemental Descriptors
+
+All values are fixed per element and do not depend on the specific crystal structure.
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `M_val` | int | — | Valence electron count of the metal (e.g. Mo → 6, Nb → 5) |
+| `M_Z` | int | — | Atomic number of the metal |
+| `M_en` | float | — | Pauling electronegativity of the metal |
+| `M_ie1` | float | eV | First ionization energy of the metal atom |
+| `M_atomic_radius` | int | pm | Covalent atomic radius of the metal (Cordero et al. 2008) |
+| `M_group` | int | — | Periodic table group of the metal (4–10) |
+| `M_period` | int | — | Periodic table period of the metal (4, 5, or 6) |
+| `M_soc_proxy` | int | — | Spin-orbit coupling strength proxy: Z² of the metal |
+| `X_en` | float | — | Pauling electronegativity of the chalcogen |
+| `X_ie1` | float | eV | First ionization energy of the chalcogen atom |
+| `X_atomic_radius` | int | pm | Covalent atomic radius of the chalcogen (Cordero et al. 2008) |
+| `X_period` | int | — | Periodic table period of the chalcogen (3 = S, 4 = Se, 5 = Te) |
+| `en_difference` | float | — | X_en − M_en; proxy for M–X bond ionicity |
+| `bond_radius_sum` | int | pm | M_atomic_radius + X_atomic_radius; expected M–X bond length |
+| `d_count_m4plus` | int | — | d-electron count of the metal assuming M⁴⁺ oxidation state: M_val − 4 |
+| `d_band_filling` | float | — | d_count_m4plus / 10; fractional filling of the 10-electron d-band |
+
+### Known Experimental Superconductivity (Literature)
+
+These columns are populated only for formulas that appear in the experimental literature with a measured superconducting transition temperature. All other rows are NaN. Tc values are phase-specific in principle; the assignment here is formula-level.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `Tc_exp_K` | float | Experimental superconducting transition temperature in Kelvin |
+| `Tc_phase` | str | Polymorph phase for which Tc was measured (e.g. `2H`, `1T`) |
+| `Tc_ref` | str | Short literature reference key |
+| `is_known_SC` | bool | True if a positive Tc_exp_K is available for this formula |
+
+---
+
+## Phase Classification
+
+The `phase` column classifies each material into a standard TMD polymorph based on its space group number:
+
+| Phase | Space group(s) | Coordination | Description |
+|-------|----------------|--------------|-------------|
+| `2H` | 194 (P6₃/mmc) | Trigonal prismatic | Hexagonal, 2-layer repeat. Common semiconducting or metallic phase for Groups V–VI. |
+| `2H-like` | 176, 186, 187 | Trigonal prismatic-like | Hexagonal space groups structurally similar to 2H. |
+| `1T` | 164 (P-3m1) | Octahedral | Trigonal, 1-layer repeat. Typical for Group IV metals. |
+| `3R` | 160, 166 (R3m, R-3m) | Trigonal prismatic | Rhombohedral, 3-layer repeat. |
+| `1T'` | 11, 12, 63, 65 (C2/m, P2₁/m, Cmce, Cmmm) | Distorted octahedral | Monoclinic distortion of 1T. Associated with Weyl semimetal phases. |
+| `CDW/distorted` | 38, 55, 58, 62 | Distorted | Orthorhombic distortions, often associated with charge-density-wave order. |
+| `cubic` | 216, 221, 225, 229 | Mixed | Rocksalt-like or zincblende cubic structures. |
+| `other` | all remaining | — | 66 materials with space groups outside the above classifications. Crystal system is available for these. |
+
+---
+
+## Dataset Statistics
+
+| Property | Value |
+|----------|-------|
+| Total materials | 202 |
+| Unique formulas | 37 |
+| Metals (M) | Ti, Zr, Hf, V, Nb, Ta, Cr, Mo, W, Mn, Fe, Co, Ni (13 total) |
+| Chalcogens (X) | S, Se, Te (3 total) |
+| Metallic (band_gap = 0) | 152 |
+| Thermodynamically stable (is_stable) | 46 |
+| Experimentally observed (theoretical = False) | 77 |
+| With DOS at Fermi | 186/202 |
+| With elastic constants | 90/202 |
+| With known experimental Tc | 80 rows (10 unique formulas) |
+| Magnetic ordering — NM / FM / FiM / AFM | 120 / 69 / 9 / 4 |
+
+---
+
+## Missing Values
+
+| Column | Missing count | Reason |
+|--------|--------------|--------|
+| `dos_at_fermi` | 16 | No DOS calculation available in MP for these material IDs |
+| `K_vrh`, `G_vrh`, `poisson_ratio`, `elastic_anisotropy`, `debye_temperature` | 112 | Elasticity calculations not performed by MP for metastable structures |
+| `Tc_exp_K`, `Tc_phase`, `Tc_ref` | ~122 | No experimental Tc reported in literature for that formula |
+
+---
+
+## Data Provenance
+
+- *Structural and thermodynamic data*: `MPRester.materials.summary.search` (mp-api v0.46.0), retrieved 2026-04-14
+- *Density of states*: `MPRester.get_dos_by_material_id`, retrieved 2026-04-14
+- *Magnetic ordering and formation energy*: `MPRester.materials.summary.search`, retrieved 2026-04-14
+- *Elastic constants*: `MPRester.elasticity.search`, retrieved 2026-04-14
+- *Atomic properties* (electronegativity, ionization energy, atomic radius): standard literature values (Pauling scale; Cordero et al. 2008 for radii; NIST Atomic Spectra Database for IEs)
+- *Experimental Tc values*: compiled from primary literature (Morris 1972, Revolinsky 1965, Wilson 1975, DiSalvo 1973, Morosan 2006, Costanzo 2016, Shi 2015, Lu 2015, Ye 2012, Qi 2016, Kang 2015)
+
+Idea:
+**Title: Electronic Phase-Space Mapping of Mechanical Robustness in Metastable TMDs**
+
+This study develops a binary classification framework to identify mechanically robust metastable TMDs by defining a stability boundary in the feature space of `d_band_filling`, `en_difference`, and `dos_at_fermi`. Rather than regressing continuous elastic constants, the model uses the 90-sample elastic dataset to characterize the electronic signatures of mechanical softening, specifically targeting materials with $G_{vrh}$ exceeding the median threshold of the stable population. By incorporating `magnetic_ordering` and `M_soc_proxy` as critical features, the model accounts for spin-dependent structural distortions—such as Jahn-Teller effects—that suppress mechanical stability in high-density-of-states phases. The classification objective is to screen the 112 metastable candidates for "mechanical viability," using a random forest ensemble to handle the non-linear interaction between crystal symmetry and electronic filling. The final output is a probability map that filters metastable TMDs, isolating those with high predicted shear moduli to prioritize candidates for experimental synthesis.
+
+Research plan:
+1. **Data Refinement and Feature Engineering**:
+   - Calculate the Pugh’s ratio ($G_{vrh} / K_{vrh}$) for the 90-sample elasticity dataset to serve as the primary target variable for mechanical robustness, replacing absolute $G_{vrh}$.
+   - Compute the "Stability-Robustness" filter: flag all materials with `energy_above_hull` > 0.05 eV/atom as high-risk candidates, as these are likely to be DFT artifacts or highly unstable phases.
+   - Create a binary feature `is_late_transition` for metals in groups 8–10 (Fe, Co, Ni) to explicitly account for PBE self-interaction errors in the model architecture.
+
+2. **Hierarchical Model Architecture**:
+   - Implement a hierarchical neural network with a shared feature extraction backbone that feeds into two specialized branches: one for "Early Transition Metals" (Groups 4–7) and one for "Late Transition Metals" (Groups 8–10).
+   - Use the shared backbone to learn general TMD physics, while the specialized heads capture group-specific electronic correlations (e.g., d-band filling effects on bonding).
+   - Replace the multi-task loss with a weighted loss function focusing on the Pugh’s ratio regression and a secondary classification task for `is_stable`.
+
+3. **Handling Missing Data and Imputation Sensitivity**:
+   - Perform a sensitivity analysis on the 16 materials missing `dos_at_fermi` by training the model twice: once with imputed values and once excluding these samples entirely.
+   - If the model's ranking of top candidates changes significantly based on the inclusion of imputed data, exclude these 16 samples from the final prioritization to ensure the results are driven by physical data rather than imputation artifacts.
+
+4. **Group-Aware Cross-Validation**:
+   - Execute Leave-One-Group-Out (LOGO) cross-validation, grouping by the transition metal element to ensure the model generalizes across different chemical species.
+   - Evaluate model performance using the $R^2$ of the Pugh’s ratio prediction; if $R^2$ remains negative, switch to a Random Forest Regressor with group-based feature importance analysis to identify if specific features are driving the variance.
+
+5. **Mechanical Viability Mapping**:
+   - Define "Mechanical Viability" as a composite score: $S = \text{Predicted}(G/K) \times \text{Confidence\_Interval}^{-1}$.
+   - Generate a 2D probability map plotting the predicted Pugh’s ratio vs. `energy_above_hull`, highlighting the "Stability-Robustness" threshold (0.05 eV/atom) to visually isolate viable candidates.
+
+6. **Candidate Prioritization and Filtering**:
+   - Rank the 112 metastable candidates based on the composite viability score.
+   - Apply the "Stability-Robustness" filter to remove candidates exceeding the 0.05 eV/atom threshold.
+   - Prioritize candidates that are `theoretical = True` (unsynthesized) to maximize the discovery potential of the study.
+
+7. **DFT-Validation of Top Candidates**:
+   - Select the top 3 candidates from the prioritized list, ensuring diversity in metal groups.
+   - Perform a "DFT-validation" step by calculating the elastic tensor for these 3 candidates using a higher-level functional (PBE+U) to verify if the predicted mechanical robustness holds under improved electronic treatment.
+   - Compare the PBE-predicted Pugh’s ratio with the PBE+U results to quantify the model's reliability for late transition metals.
+
+8. **Final Robustness Check**:
+   - Conduct a "leave-one-metal-out" sensitivity check on the top 10 prioritized candidates to ensure that the predicted mechanical viability is not an artifact of a single metal-chalcogen combination.
+   - Validate that the final selection follows the expected physical trend of $G/K$ vs. `d_band_filling` for TMDs, ensuring the model's predictions align with established solid-state chemistry principles.
+
+Previous research plan:
+1. **Data Preprocessing and Imputation**:
+   - Split the dataset into "Elasticity-Known" (90 samples) and "Elasticity-Unknown" (112 samples).
+   - Perform iterative imputation for missing `dos_at_fermi` values using `IterativeImputer` with a BayesianRidge estimator. Crucially, fit the imputer only on the training folds during cross-validation to prevent data leakage.
+   - Standardize continuous features (e.g., `d_band_filling`, `en_difference`, `dos_at_fermi`, `M_soc_proxy`, `c_a_ratio`) to zero mean and unit variance.
+   - Z-score normalize `G_vrh` to a [0, 1] range to ensure the regression head does not dominate the multi-task loss.
+
+2. **Multi-Task Model Architecture**:
+   - Construct a neural network with a shared feature extraction backbone (dense layers with ReLU activation).
+   - Define two output heads: a regression head for normalized `G_vrh` and a classification head for `is_stable`.
+   - Implement homoscedastic uncertainty weighting for the loss function $L = \frac{1}{2\sigma_1^2} \text{MSE}(G_{vrh}) + \frac{1}{2\sigma_2^2} \text{BCE}(is\_stable) + \log(\sigma_1\sigma_2)$ to dynamically balance the regression and classification tasks.
+
+3. **Feature Engineering and Regularization**:
+   - Include `d_band_filling`, `en_difference`, `bond_radius_sum`, and `c_a_ratio` as primary physical descriptors.
+   - Apply ElasticNet regularization to the shared backbone, but apply a custom penalty mask to ensure `d_band_filling` and `en_difference` are protected from being dropped.
+   - One-hot encode `magnetic_ordering` and `crystal_system` to capture categorical structural influences.
+
+4. **Model Training and Validation**:
+   - Train the model using the 90-sample elasticity dataset for the regression head and the full 202-sample dataset for the stability head.
+   - Implement Leave-One-Group-Out (LOGO) cross-validation, grouping by "Periodic Table Group," ensuring stratified splits within folds to maintain chemical diversity.
+   - Monitor the correlation between predicted `G_vrh` and `energy_above_hull` to ensure the model captures the physical "softening" trend in metastable phases.
+
+5. **Sensitivity and Uncertainty Analysis**:
+   - Perform a Monte Carlo sensitivity check by running multiple forward passes with jittered input features to quantify the model's confidence in the predicted `G_vrh`.
+   - For candidates with high `d_band_filling` and FM/FiM magnetic ordering, assign a "High-Correlation Sensitivity" flag, noting that PBE-level predictions for these late transition metals may overestimate mechanical robustness.
+
+6. **Mechanical Viability Mapping**:
+   - Define "Mechanical Viability" using a Z-score threshold: $G_{vrh} > \mu_{stable} + \sigma_{stable}$ (based on the stable population distribution).
+   - Calculate "Specific Shear Modulus" ($G_{vrh} / \rho$) as a secondary metric to ensure candidates possess high intrinsic bond-stiffness rather than just high density.
+   - Generate a 2D probability map plotting predicted $G_{vrh}$ vs. `energy_above_hull`, color-coded by the model's uncertainty.
+
+7. **Candidate Prioritization**:
+   - Rank the 112 metastable candidates based on the viability score.
+   - Filter for candidates with `energy_above_hull` < 0.05 eV/atom and high predicted $G_{vrh}$.
+   - Cross-reference with the `theoretical` flag to prioritize previously unsynthesized materials.
+
+8. **Final Robustness Check**:
+   - Perform a "leave-one-metal-out" sensitivity check on the top 10 prioritized candidates to ensure the predicted mechanical viability is not driven by a single metal-chalcogen combination.
+   - Validate that the final selection follows the expected physical trend of $G_{vrh}$ vs. `d_band_filling` for TMDs.
+
+Feedback on previous research plan:
+The current analysis successfully establishes a link between electronic structure (d-band filling, DOS at Fermi) and mechanical robustness, providing a physically grounded screening tool. However, the methodology suffers from significant statistical and conceptual limitations that must be addressed to move beyond "correlation" toward "predictive utility."
+
+**1. Statistical Validity of the Regression Head:**
+The reported negative $R^2$ (-6.508) in LOGO cross-validation is a critical red flag. While you correctly identify this as a consequence of high inter-group variance, it implies that the model is failing to learn a generalized physical law across the periodic table. Relying on a model with negative $R^2$ to prioritize candidates is dangerous. 
+*   **Action:** Instead of a global regression, implement a **hierarchical or group-aware model**. Since the physics of Group 4 (Ti, Zr, Hf) differs fundamentally from Group 10 (Ni), consider training separate heads or using a "transfer learning" approach where the backbone is pre-trained on the full set and fine-tuned on specific groups.
+
+**2. Over-reliance on PBE-derived Descriptors:**
+You correctly identify that PBE struggles with late 3d transition metals (Mn, Fe, Ni) due to self-interaction errors. However, you continue to use these potentially flawed `dos_at_fermi` and `magnetic_ordering` values as primary inputs.
+*   **Action:** Perform a **"Stability-Robustness" filter**. Before trusting the model's prediction for a candidate, check if the candidate's `energy_above_hull` is within the DFT error margin (typically ~30-50 meV/atom). If the model predicts high robustness for a material that is likely a DFT artifact (i.e., a "false stable" due to PBE errors), it should be deprioritized regardless of the $G_{vrh}$ score.
+
+**3. The "Mechanical Viability" Threshold:**
+Defining viability as $G_{vrh} > \mu_{stable} + \sigma_{stable}$ is arbitrary. A material with a lower shear modulus might still be "mechanically robust" if it possesses high ductility or specific anisotropic properties.
+*   **Action:** Shift focus from absolute $G_{vrh}$ to the **Pugh’s ratio ($G/K$)**. This is a more standard metric for ductility vs. brittleness in TMDs. Since you have both $G_{vrh}$ and $K_{vrh}$ for the 90-sample set, predicting the $G/K$ ratio will provide a more nuanced "viability" metric that accounts for both shear and bulk stiffness.
+
+**4. Addressing the Missing Data:**
+The imputation of `dos_at_fermi` for 16 materials is a potential source of bias. 
+*   **Action:** Perform a sensitivity check: compare the model's performance with and without the imputed samples. If the imputed samples disproportionately populate the "high viability" list, they are likely artifacts of the imputer rather than physical discoveries.
+
+**5. Future Iteration Strategy:**
+The current plan to "rank candidates" is sound, but it lacks an experimental feedback loop. 
+*   **Action:** For the next iteration, do not just prioritize by score. Select a small, diverse set of candidates (e.g., one from each group) and perform a **"DFT-validation" step**. Calculate the elastic tensor for the top 3 candidates using a higher-level functional (e.g., HSE06 or PBE+U) to see if the "mechanical robustness" holds up under more rigorous electronic treatment. This will validate the model's physical intuition rather than just its ability to interpolate PBE data.
+
+**Summary:** The model is currently a sophisticated interpolator of PBE-level data. To make it a discovery tool, you must explicitly account for the systematic errors in PBE (especially for late transition metals) and pivot from absolute stiffness to more physically relevant ratios like $G/K$.
+
+
+Respond in this format:
+
+\\begin{SUGGESTIONS}
+<SUGGESTIONS>
+\\end{SUGGESTIONS}
+
+In <SUGGESTIONS> put the suggestions to improve the plan.
+
+###### PROMPT ENDS ########
+
+\begin{SUGGESTIONS}
+The revised research plan is well-structured and addresses the previous feedback effectively. I have only a few minor suggestions to further strengthen the robustness and interpretability of the study:
+
+1. **Refine the "DFT-Validation" Step (Step 7):** While calculating elastic tensors with PBE+U is excellent, ensure that the validation includes a check for **dynamical stability** (e.g., phonon dispersion calculations or at least checking for imaginary frequencies at the Gamma point). A material can be mechanically robust (high $G/K$) but dynamically unstable, which would render it non-synthesizable. If full phonon calculations are too computationally expensive, at least verify that the structure does not undergo spontaneous symmetry breaking during the PBE+U relaxation.
+
+2. **Clarify the "Hierarchical Architecture" (Step 2):** To avoid overfitting given the small dataset (90 samples), ensure that the "shared backbone" is not overly deep. A shallow architecture (e.g., 2-3 dense layers) is likely sufficient to capture the physics without memorizing the training set. Consider using **Dropout or L2 regularization** within the shared backbone to maintain generalization across the group-specific heads.
+
+3. **Feature Importance Interpretation (Step 4):** Since you are switching to a Random Forest Regressor if the neural network $R^2$ remains negative, ensure that you use **SHAP (SHapley Additive exPlanations) values** rather than simple feature importance. SHAP will allow you to visualize how `d_band_filling` and `en_difference` interact non-linearly to influence the Pugh's ratio, providing the "physical intuition" requested in the feedback.
+
+4. **Data Leakage Prevention (Step 3):** When performing the sensitivity analysis on the 16 missing `dos_at_fermi` samples, ensure that the imputation parameters (e.g., mean/median or regression coefficients) are derived **strictly from the training folds** during the cross-validation process. Do not use the global mean/median of the entire dataset to fill these values, as this introduces information from the test set into the training process.
+
+5. **Pugh's Ratio Interpretation:** Note that while $G/K$ is a standard proxy for ductility (brittle if $G/K > 0.57$), it is also sensitive to the crystal system. Since your dataset spans 7 crystal systems, consider adding `crystal_system` as a categorical covariate in your regression model to account for the baseline differences in $G/K$ inherent to different symmetries.
+\end{SUGGESTIONS}
+
