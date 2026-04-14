@@ -1,0 +1,381 @@
+[
+  {
+    "name": "control_starter",
+    "content": "",
+    "timestamp": "2026-04-14 20:49:53",
+    "cost": {
+      "Agent": [
+        "control_starter"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.0011510000000000001
+      ],
+      "Prompt Tokens": [
+        4226
+      ],
+      "Completion Tokens": [
+        63
+      ],
+      "Total Tokens": [
+        4289
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "\n**Step number:** 4 out of 5.\n\n**Sub-task:** Mechanical Viability Mapping and Robustness Check\n\n**Agent in charge of sub-task:** `engineer`\n\n**Instructions:**\n\n- Compute 'Mechanical Viability' threshold (mean + 1 std of stable population G_vrh) and 'Specific Shear Modulus' (using density from volume_per_atom and molar mass)\n- Perform 'leave-one-metal-out' robustness check on the top 10 candidates (retrain model excluding each metal, record changes in predicted G_vrh, flag candidates with >20% change)\n- Generate a 2D probability map (predicted G_vrh vs. energy_above_hull, color-coded by uncertainty, marker-coded by sensitivity flag)\n- Generate a secondary plot of G_vrh vs. d_band_filling\n- Rank/save the final prioritization list (CSV)\n\n**Status:** in progress \u23f3\n",
+    "timestamp": "2026-04-14 20:49:53",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "engineer",
+    "content": "**Code Explanation:**\n\nThe code performs the Mechanical Viability Mapping and Robustness Check as outlined in Step 4. \n1. **Mechanical Viability Threshold**: It calculates the viability threshold as the mean plus one standard deviation of the shear modulus ($G_{vrh}$) for the thermodynamically stable population.\n2. **Specific Shear Modulus**: It computes the density (in g/cm\u00b3) for each material using the atomic masses of the constituent elements and the `volume_per_atom` feature. The specific shear modulus is then calculated as $G_{vrh} / \\rho$.\n3. **Candidate Prioritization**: The 112 metastable candidates (where elasticity is unknown) are ranked based on four criteria: (1) `energy_above_hull` < 0.05 eV/atom, (2) predicted $G_{vrh}$ > viability threshold, (3) `theoretical` flag (prioritizing unsynthesized materials), and (4) the predicted $G_{vrh}$ score.\n4. **Leave-One-Metal-Out Robustness Check**: For the top 10 prioritized candidates, the script identifies their unique transition metals. It then retrains the multi-task neural network from scratch, excluding all samples containing that specific metal from the training set. The retrained models are used to predict $G_{vrh}$ for the top 10 candidates, and the percentage change relative to the original prediction is recorded. Candidates with a change > 20% are flagged.\n5. **Visualizations**: \n   - A 2D probability map plots predicted $G_{vrh}$ against `energy_above_hull`, color-coded by the Monte Carlo prediction uncertainty, with high-correlation sensitivity candidates highlighted.\n   - A secondary plot shows predicted $G_{vrh}$ versus `d_band_filling`, distinguishing between stable and metastable phases.\n6. **Output**: The final ranked list, including the robustness check results, is saved to `data/prioritization_list.csv`.\n\n**Python Code:**\n\n```python\nimport sys\nimport os\nsys.path.insert(0, os.path.abspath(\"codebase\"))\nimport pandas as pd\nimport numpy as np\nimport json\nimport torch\nimport matplotlib.pyplot as plt\nfrom datetime import datetime\nfrom sklearn.preprocessing import StandardScaler, MinMaxScaler\nfrom step_2 import train_model, set_seed\n\ndef main():\n    set_seed(42)\n    \n    # Load data\n    results_df = pd.read_csv('data/sensitivity_analysis_results.csv')\n    orig_df = pd.read_csv('/home/node/work/projects/materials_project_v1/tmd_data_enriched.csv')\n    \n    # Compute Mechanical Viability threshold\n    stable_df = orig_df[orig_df['is_stable'] == True]\n    stable_g_vrh = stable_df['G_vrh'].dropna()\n    viability_threshold = stable_g_vrh.mean() + stable_g_vrh.std()\n    print(\"=== Mechanical Viability Analysis ===\")\n    print(\"Stable population G_vrh mean: \" + str(round(stable_g_vrh.mean(), 2)) + \" GPa\")\n    print(\"Stable population G_vrh std: \" + str(round(stable_g_vrh.std(), 2)) + \" GPa\")\n    print(\"Mechanical Viability Threshold (mean + 1 std): \" + str(round(viability_threshold, 2)) + \" GPa\")\n    \n    # Compute Specific Shear Modulus\n    atomic_masses = {\n        'Ti': 47.867, 'Zr': 91.224, 'Hf': 178.49, 'V': 50.9415, 'Nb': 92.906, 'Ta': 180.947,\n        'Cr': 51.996, 'Mo': 95.95, 'W': 183.84, 'Mn': 54.938, 'Fe': 55.845, 'Co': 58.933, 'Ni': 58.693,\n        'S': 32.06, 'Se': 78.971, 'Te': 127.6\n    }\n    \n    def get_density(row):\n        m_mass = atomic_masses[row['metal']]\n        x_mass = atomic_masses[row['chalcogen']]\n        formula_mass = m_mass + 2 * x_mass\n        # Density in g/cm^3\n        density = formula_mass / (3 * 0.6022 * row['volume_per_atom'])\n        return density\n\n    results_df['density_g_cm3'] = results_df.apply(get_density, axis=1)\n    results_df['specific_shear_modulus'] = results_df['G_vrh_pred_mean'] / results_df['density_g_cm3']\n    \n    # Filter metastable candidates (unknown elasticity)\n    unknown_candidates = results_df[results_df['is_known_elasticity'] == False].copy()\n    \n    # Prioritization logic\n    unknown_candidates['meets_eah_criteria'] = unknown_candidates['energy_above_hull'] < 0.05\n    unknown_candidates['meets_viability'] = unknown_candidates['G_vrh_pred_mean'] > viability_threshold\n    unknown_candidates['viability_score'] = unknown_candidates['G_vrh_pred_mean']\n    \n    final_ranked_list = unknown_candidates.sort_values(\n        by=['meets_eah_criteria', 'meets_viability', 'theoretical', 'viability_score'],\n        ascending=[False, False, False, False]\n    )\n    \n    top_10 = final_ranked_list.head(10).copy()\n    \n    print(\"\\n=== Top 10 Prioritized Candidates ===\")\n    cols_to_print = ['formula', 'metal', 'G_vrh_pred_mean', 'specific_shear_modulus', 'energy_above_hull', 'theoretical']\n    print(top_10[cols_to_print].to_string(index=False))\n    \n    # Leave-one-metal-out robustness check\n    print(\"\\n=== Performing 'leave-one-metal-out' robustness check on top 10 candidates ===\")\n    \n    # Load training data\n    known_df = pd.read_csv('data/known_df_processed.csv')\n    unknown_df = pd.read_csv('data/unknown_df_processed.csv')\n    full_df = pd.concat([known_df, unknown_df], ignore_index=True)\n    \n    with open('data/feature_list.json', 'r') as f:\n        feature_list = json.load(f)\n        \n    X = full_df[feature_list].values\n    y_reg = full_df['G_vrh_norm'].values\n    y_clf = full_df['is_stable'].values\n    reg_mask = ~np.isnan(y_reg)\n    y_reg_safe = np.nan_to_num(y_reg, nan=0.0)\n    \n    X_tensor = torch.tensor(X, dtype=torch.float32)\n    y_reg_tensor = torch.tensor(y_reg_safe, dtype=torch.float32)\n    y_clf_tensor = torch.tensor(y_clf, dtype=torch.float32)\n    reg_mask_tensor = torch.tensor(reg_mask, dtype=torch.float32)\n    \n    protected_features = ['d_band_filling', 'en_difference']\n    protected_indices = [feature_list.index(f) for f in protected_features if f in feature_list]\n    \n    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')\n    \n    # We need to unnormalize predictions\n    z_scaler = StandardScaler()\n    orig_known = orig_df[orig_df['G_vrh'].notna()].copy()\n    g_vrh_z = z_scaler.fit_transform(orig_known[['G_vrh']])\n    minmax_scaler = MinMaxScaler()\n    minmax_scaler.fit(g_vrh_z)\n    \n    def unnormalize_g_vrh(g_vrh_norm):\n        shape = g_vrh_norm.shape\n        g_vrh_z_un = minmax_scaler.inverse_transform(g_vrh_norm.reshape(-1, 1))\n        g_vrh_un = z_scaler.inverse_transform(g_vrh_z_un)\n        return g_vrh_un.reshape(shape)\n    \n    # Get metals for the full dataset to filter\n    orig_full = pd.concat([orig_known, orig_df[orig_df['G_vrh'].isna()]], ignore_index=True)\n    full_metals = orig_full['metal'].values\n    \n    unique_metals_in_top10 = top_10['metal'].unique()\n    metal_models = {}\n    \n    for metal in unique_metals_in_top10:\n        print(\"Retraining model excluding metal: \" + metal)\n        keep_mask = full_metals != metal\n        \n        X_train = X_tensor[keep_mask]\n        y_reg_train = y_reg_tensor[keep_mask]\n        y_clf_train = y_clf_tensor[keep_mask]\n        reg_mask_train = reg_mask_tensor[keep_mask]\n        \n        model = train_model(X_train, y_reg_train, y_clf_train, reg_mask_train, protected_indices, epochs=300, lr=0.005, device=device)\n        model.eval()\n        metal_models[metal] = model\n        \n    top_10['G_vrh_pred_lomo'] = np.nan\n    top_10['lomo_pct_change'] = np.nan\n    top_10['robustness_flag'] = False\n    \n    for idx, row in top_10.iterrows():\n        metal = row['metal']\n        model = metal_models[metal]\n        \n        mat_idx = orig_full.index[orig_full['material_id'] == row['material_id']].tolist()[0]\n        \n        x_in = X_tensor[mat_idx:mat_idx+1].to(device)\n        with torch.no_grad():\n            reg_pred, _ = model(x_in)\n            reg_pred_norm = reg_pred.cpu().numpy()\n            \n        pred_unnorm = unnormalize_g_vrh(reg_pred_norm)[0, 0]\n        \n        orig_pred = row['G_vrh_pred_mean']\n        pct_change = abs(pred_unnorm - orig_pred) / orig_pred * 100\n        \n        top_10.at[idx, 'G_vrh_pred_lomo'] = pred_unnorm\n        top_10.at[idx, 'lomo_pct_change'] = pct_change\n        top_10.at[idx, 'robustness_flag'] = pct_change > 20.0\n        \n    print(\"\\n=== Robustness Check Results ===\")\n    print(top_10[['formula', 'metal', 'G_vrh_pred_mean', 'G_vrh_pred_lomo', 'lomo_pct_change', 'robustness_flag']].to_string(index=False))\n    \n    # Merge the LOMO results back into the final_ranked_list\n    final_ranked_list = final_ranked_list.merge(\n        top_10[['material_id', 'G_vrh_pred_lomo', 'lomo_pct_change', 'robustness_flag']], \n        on='material_id', \n        how='left'\n    )\n    \n    final_list_path = os.path.join('data', 'prioritization_list.csv')\n    final_ranked_list.to_csv(final_list_path, index=False)\n    print(\"\\nFinal prioritization list saved to \" + final_list_path)\n    \n    # Generate 2D probability map\n    plt.figure(figsize=(10, 7))\n    plt.rcParams['text.usetex'] = False\n    \n    sc = plt.scatter(\n        results_df['energy_above_hull'], \n        results_df['G_vrh_pred_mean'], \n        c=results_df['G_vrh_pred_std'], \n        cmap='viridis', \n        alpha=0.8,\n        edgecolors='w',\n        s=60\n    )\n    \n    high_corr = results_df[results_df['high_corr_sensitivity'] == True]\n    if len(high_corr) > 0:\n        plt.scatter(\n            high_corr['energy_above_hull'], \n            high_corr['G_vrh_pred_mean'], \n            facecolors='none', \n            edgecolors='red', \n            s=100, \n            linewidths=2,\n            label='High-Corr Sensitivity'\n        )\n    \n    plt.axhline(y=viability_threshold, color='r', linestyle='--', label='Viability Threshold')\n    \n    plt.colorbar(sc, label='Prediction Uncertainty (Std Dev, GPa)')\n    plt.xlabel('Energy Above Hull (eV/atom)')\n    plt.ylabel('Predicted Shear Modulus $G_{vrh}$ (GPa)')\n    plt.title('Mechanical Viability Map of TMDs')\n    plt.legend()\n    plt.grid(True, linestyle=':', alpha=0.7)\n    plt.tight_layout()\n    \n    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')\n    plot1_path = os.path.join('data', 'mechanical_viability_map_4_' + timestamp + '.png')\n    plt.savefig(plot1_path, dpi=300)\n    print(\"Plot saved to \" + plot1_path)\n    \n    # Generate secondary plot: G_vrh vs d_band_filling\n    plt.figure(figsize=(9, 6))\n    \n    plt.scatter(\n        results_df['d_band_filling'], \n        results_df['G_vrh_pred_mean'], \n        c=results_df['is_stable'].astype(int), \n        cmap='coolwarm', \n        alpha=0.7,\n        edgecolors='k',\n        s=60\n    )\n    \n    plt.axhline(y=viability_threshold, color='r', linestyle='--', label='Viability Threshold')\n    \n    plt.xlabel('d-band Filling (fractional)')\n    plt.ylabel('Predicted Shear Modulus $G_{vrh}$ (GPa)')\n    plt.title('Shear Modulus vs. d-band Filling')\n    \n    from matplotlib.lines import Line2D\n    custom_lines = [\n        Line2D([0], [0], marker='o', color='w', markerfacecolor=plt.cm.coolwarm(0.0), markersize=10, markeredgecolor='k'),\n        Line2D([0], [0], marker='o', color='w', markerfacecolor=plt.cm.coolwarm(1.0), markersize=10, markeredgecolor='k'),\n        Line2D([0], [0], color='r', linestyle='--')\n    ]\n    plt.legend(custom_lines, ['Metastable', 'Stable', 'Viability Threshold'])\n    \n    plt.grid(True, linestyle=':', alpha=0.7)\n    plt.tight_layout()\n    \n    plot2_path = os.path.join('data', 'g_vrh_vs_dband_filling_4_' + timestamp + '.png')\n    plt.savefig(plot2_path, dpi=300)\n    print(\"Plot saved to \" + plot2_path)\n\nif __name__ == '__main__':\n    main()\n```",
+    "timestamp": "2026-04-14 20:52:24",
+    "cost": {
+      "Agent": [
+        "engineer"
+      ],
+      "Model": [
+        "gemini-3.1-pro-preview"
+      ],
+      "Cost": [
+        0.08422
+      ],
+      "Prompt Tokens": [
+        19256
+      ],
+      "Completion Tokens": [
+        3809
+      ],
+      "Total Tokens": [
+        23065
+      ]
+    }
+  },
+  {
+    "name": "engineer_response_evaluator",
+    "content": "**Code Explanation:**\n\nThe code performs the Mechanical Viability Mapping and Robustness Check as outlined in Step 4. 1. Mechanical Viability Threshold: It calculates the viability threshold as the mean plus one standard deviation of the shear modulus (G_vrh) for the thermodynamically stable population. 2. Specific Shear Modulus: It computes the density (in g/cm^3) for each material using the atomic masses of the constituent elements and the volume_per_atom feature. The specific shear modulus is then calculated as G_vrh / density. 3. Candidate Prioritization: The 112 metastable candidates (where elasticity is unknown) are ranked based on four criteria: (1) energy_above_hull < 0.05 eV/atom, (2) predicted G_vrh > viability threshold, (3) theoretical flag (prioritizing unsynthesized materials), and (4) the predicted G_vrh score. 4. Leave-One-Metal-Out Robustness Check: For the top 10 prioritized candidates, the script identifies their unique transition metals. It then retrains the multi-task neural network from scratch, excluding all samples containing that specific metal from the training set. The retrained models are used to predict G_vrh for the top 10 candidates, and the percentage change relative to the original prediction is recorded. Candidates with a change > 20% are flagged. 5. Visualizations: A 2D probability map plots predicted G_vrh against energy_above_hull, color-coded by the Monte Carlo prediction uncertainty, with high-correlation sensitivity candidates highlighted. A secondary plot shows predicted G_vrh versus d_band_filling, distinguishing between stable and metastable phases. 6. Output: The final ranked list, including the robustness check results, is saved to data/prioritization_list.csv.\n\n**Modifications:**\n\nAdded if __name__ == '__main__': block, ensured all file paths use the data/ directory, removed LaTeX rendering, and ensured all imports are relative to the codebase folder.\n\n**Python Code:**\n\n```python\n# filename: codebase/step_4.py\nimport sys\nimport os\nsys.path.insert(0, os.path.abspath(\"codebase\"))\nimport pandas as pd\nimport numpy as np\nimport json\nimport torch\nimport matplotlib.pyplot as plt\nfrom datetime import datetime\nfrom sklearn.preprocessing import StandardScaler, MinMaxScaler\nfrom step_2 import train_model, set_seed\nfrom matplotlib.lines import Line2D\n\ndef main():\n    set_seed(42)\n    results_df = pd.read_csv('data/sensitivity_analysis_results.csv')\n    orig_df = pd.read_csv('/home/node/work/projects/materials_project_v1/tmd_data_enriched.csv')\n    stable_df = orig_df[orig_df['is_stable'] == True]\n    stable_g_vrh = stable_df['G_vrh'].dropna()\n    viability_threshold = stable_g_vrh.mean() + stable_g_vrh.std()\n    atomic_masses = {'Ti': 47.867, 'Zr': 91.224, 'Hf': 178.49, 'V': 50.9415, 'Nb': 92.906, 'Ta': 180.947, 'Cr': 51.996, 'Mo': 95.95, 'W': 183.84, 'Mn': 54.938, 'Fe': 55.845, 'Co': 58.933, 'Ni': 58.693, 'S': 32.06, 'Se': 78.971, 'Te': 127.6}\n    def get_density(row):\n        m_mass = atomic_masses[row['metal']]\n        x_mass = atomic_masses[row['chalcogen']]\n        formula_mass = m_mass + 2 * x_mass\n        density = formula_mass / (3 * 0.6022 * row['volume_per_atom'])\n        return density\n    results_df['density_g_cm3'] = results_df.apply(get_density, axis=1)\n    results_df['specific_shear_modulus'] = results_df['G_vrh_pred_mean'] / results_df['density_g_cm3']\n    unknown_candidates = results_df[results_df['is_known_elasticity'] == False].copy()\n    unknown_candidates['meets_eah_criteria'] = unknown_candidates['energy_above_hull'] < 0.05\n    unknown_candidates['meets_viability'] = unknown_candidates['G_vrh_pred_mean'] > viability_threshold\n    unknown_candidates['viability_score'] = unknown_candidates['G_vrh_pred_mean']\n    final_ranked_list = unknown_candidates.sort_values(by=['meets_eah_criteria', 'meets_viability', 'theoretical', 'viability_score'], ascending=[False, False, False, False])\n    top_10 = final_ranked_list.head(10).copy()\n    known_df = pd.read_csv('data/known_df_processed.csv')\n    unknown_df = pd.read_csv('data/unknown_df_processed.csv')\n    full_df = pd.concat([known_df, unknown_df], ignore_index=True)\n    with open('data/feature_list.json', 'r') as f:\n        feature_list = json.load(f)\n    X = full_df[feature_list].values\n    y_reg = full_df['G_vrh_norm'].values\n    y_clf = full_df['is_stable'].values\n    reg_mask = ~np.isnan(y_reg)\n    y_reg_safe = np.nan_to_num(y_reg, nan=0.0)\n    X_tensor = torch.tensor(X, dtype=torch.float32)\n    y_reg_tensor = torch.tensor(y_reg_safe, dtype=torch.float32)\n    y_clf_tensor = torch.tensor(y_clf, dtype=torch.float32)\n    reg_mask_tensor = torch.tensor(reg_mask, dtype=torch.float32)\n    protected_features = ['d_band_filling', 'en_difference']\n    protected_indices = [feature_list.index(f) for f in protected_features if f in feature_list]\n    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')\n    z_scaler = StandardScaler()\n    orig_known = orig_df[orig_df['G_vrh'].notna()].copy()\n    g_vrh_z = z_scaler.fit_transform(orig_known[['G_vrh']])\n    minmax_scaler = MinMaxScaler()\n    minmax_scaler.fit(g_vrh_z)\n    def unnormalize_g_vrh(g_vrh_norm):\n        shape = g_vrh_norm.shape\n        g_vrh_z_un = minmax_scaler.inverse_transform(g_vrh_norm.reshape(-1, 1))\n        g_vrh_un = z_scaler.inverse_transform(g_vrh_z_un)\n        return g_vrh_un.reshape(shape)\n    orig_full = pd.concat([orig_known, orig_df[orig_df['G_vrh'].isna()]], ignore_index=True)\n    full_metals = orig_full['metal'].values\n    unique_metals_in_top10 = top_10['metal'].unique()\n    metal_models = {}\n    for metal in unique_metals_in_top10:\n        keep_mask = full_metals != metal\n        X_train = X_tensor[keep_mask]\n        y_reg_train = y_reg_tensor[keep_mask]\n        y_clf_train = y_clf_tensor[keep_mask]\n        reg_mask_train = reg_mask_tensor[keep_mask]\n        model = train_model(X_train, y_reg_train, y_clf_train, reg_mask_train, protected_indices, epochs=300, lr=0.005, device=device)\n        model.eval()\n        metal_models[metal] = model\n    top_10['G_vrh_pred_lomo'] = np.nan\n    top_10['lomo_pct_change'] = np.nan\n    top_10['robustness_flag'] = False\n    for idx, row in top_10.iterrows():\n        metal = row['metal']\n        model = metal_models[metal]\n        mat_idx = orig_full.index[orig_full['material_id'] == row['material_id']].tolist()[0]\n        x_in = X_tensor[mat_idx:mat_idx+1].to(device)\n        with torch.no_grad():\n            reg_pred, _ = model(x_in)\n            reg_pred_norm = reg_pred.cpu().numpy()\n        pred_unnorm = unnormalize_g_vrh(reg_pred_norm)[0, 0]\n        orig_pred = row['G_vrh_pred_mean']\n        pct_change = abs(pred_unnorm - orig_pred) / orig_pred * 100\n        top_10.at[idx, 'G_vrh_pred_lomo'] = pred_unnorm\n        top_10.at[idx, 'lomo_pct_change'] = pct_change\n        top_10.at[idx, 'robustness_flag'] = pct_change > 20.0\n    final_ranked_list = final_ranked_list.merge(top_10[['material_id', 'G_vrh_pred_lomo', 'lomo_pct_change', 'robustness_flag']], on='material_id', how='left')\n    final_list_path = os.path.join('data', 'prioritization_list.csv')\n    final_ranked_list.to_csv(final_list_path, index=False)\n    plt.figure(figsize=(10, 7))\n    plt.rcParams['text.usetex'] = False\n    sc = plt.scatter(results_df['energy_above_hull'], results_df['G_vrh_pred_mean'], c=results_df['G_vrh_pred_std'], cmap='viridis', alpha=0.8, edgecolors='w', s=60)\n    high_corr = results_df[results_df['high_corr_sensitivity'] == True]\n    if len(high_corr) > 0:\n        plt.scatter(high_corr['energy_above_hull'], high_corr['G_vrh_pred_mean'], facecolors='none', edgecolors='red', s=100, linewidths=2, label='High-Corr Sensitivity')\n    plt.axhline(y=viability_threshold, color='r', linestyle='--', label='Viability Threshold')\n    plt.colorbar(sc, label='Prediction Uncertainty (Std Dev, GPa)')\n    plt.xlabel('Energy Above Hull (eV/atom)')\n    plt.ylabel('Predicted Shear Modulus G_vrh (GPa)')\n    plt.title('Mechanical Viability Map of TMDs')\n    plt.legend()\n    plt.grid(True, linestyle=':', alpha=0.7)\n    plt.tight_layout()\n    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')\n    plot1_path = os.path.join('data', 'mechanical_viability_map_4_' + timestamp + '.png')\n    plt.savefig(plot1_path, dpi=300)\n    plt.figure(figsize=(9, 6))\n    plt.scatter(results_df['d_band_filling'], results_df['G_vrh_pred_mean'], c=results_df['is_stable'].astype(int), cmap='coolwarm', alpha=0.7, edgecolors='k', s=60)\n    plt.axhline(y=viability_threshold, color='r', linestyle='--', label='Viability Threshold')\n    plt.xlabel('d-band Filling (fractional)')\n    plt.ylabel('Predicted Shear Modulus G_vrh (GPa)')\n    plt.title('Shear Modulus vs. d-band Filling')\n    custom_lines = [Line2D([0], [0], marker='o', color='w', markerfacecolor=plt.cm.coolwarm(0.0), markersize=10, markeredgecolor='k'), Line2D([0], [0], marker='o', color='w', markerfacecolor=plt.cm.coolwarm(1.0), markersize=10, markeredgecolor='k'), Line2D([0], [0], color='r', linestyle='--')]\n    plt.legend(custom_lines, ['Metastable', 'Stable', 'Viability Threshold'])\n    plt.grid(True, linestyle=':', alpha=0.7)\n    plt.tight_layout()\n    plot2_path = os.path.join('data', 'g_vrh_vs_dband_filling_4_' + timestamp + '.png')\n    plt.savefig(plot2_path, dpi=300)\n\nif __name__ == '__main__':\n    main()\n```",
+    "timestamp": "2026-04-14 20:52:37",
+    "cost": {
+      "Agent": [
+        "engineer_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.0070272500000000005
+      ],
+      "Prompt Tokens": [
+        8651
+      ],
+      "Completion Tokens": [
+        3243
+      ],
+      "Total Tokens": [
+        11894
+      ]
+    }
+  },
+  {
+    "name": "executor",
+    "content": "Execution results:\n\nExecution output: \n",
+    "timestamp": "2026-04-14 20:52:54",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "execution_recorder",
+    "content": "Code execution recorded.\n\nExecution output:\nExecution results:\n\nExecution output: \n",
+    "timestamp": "2026-04-14 20:52:54",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "executor_response_evaluator",
+    "content": "",
+    "timestamp": "2026-04-14 20:52:57",
+    "cost": {
+      "Agent": [
+        "executor_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.00022999999999999998
+      ],
+      "Prompt Tokens": [
+        740
+      ],
+      "Completion Tokens": [
+        30
+      ],
+      "Total Tokens": [
+        770
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "Code execution status: success. Transfer to controller to evaluate step progress.\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nWorkflow status:\n\nPlan step number: 4\n\nAgent for sub-task (might be different from the next agent suggestion for debugging): engineer\n\nStep status (before execution): in progress\n\nCode status: success\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\n",
+    "timestamp": "2026-04-14 20:52:57",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "controller",
+    "content": "",
+    "timestamp": "2026-04-14 20:52:59",
+    "cost": {
+      "Agent": [
+        "controller"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.0033190000000000003
+      ],
+      "Prompt Tokens": [
+        13162
+      ],
+      "Completion Tokens": [
+        19
+      ],
+      "Total Tokens": [
+        13181
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "\n**Step number:** 4 out of 5.\n\n**Sub-task:** Mechanical Viability Mapping and Robustness Check\n\n**Agent in charge of sub-task:** `engineer`\n\n**Instructions:**\n\n- Compute 'Mechanical Viability' threshold (mean + 1 std of stable population G_vrh) and 'Specific Shear Modulus' (using density from volume_per_atom and molar mass)\n- Perform 'leave-one-metal-out' robustness check on the top 10 candidates (retrain model excluding each metal, record changes in predicted G_vrh, flag candidates with >20% change)\n- Generate a 2D probability map (predicted G_vrh vs. energy_above_hull, color-coded by uncertainty, marker-coded by sensitivity flag)\n- Generate a secondary plot of G_vrh vs. d_band_filling\n- Rank/save the final prioritization list (CSV)\n\n**Step status:** in progress \u23f3\n\n**Code status:** None\n\n**Step iteration:** 1/10\n        ",
+    "timestamp": "2026-04-14 20:52:59",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "engineer",
+    "content": "I have successfully executed the code for Step 4. The mechanical viability threshold and specific shear modulus were computed, the leave-one-metal-out robustness check was performed on the top 10 candidates, the 2D probability map and secondary plot were generated and saved, and the final prioritization list was ranked and saved to `data/prioritization_list.csv`.\n\nI will now transfer control to the researcher agent to proceed with Step 5.",
+    "timestamp": "2026-04-14 20:53:03",
+    "cost": {
+      "Agent": [
+        "engineer",
+        "engineer"
+      ],
+      "Model": [
+        "gemini-3.1-pro-preview",
+        "gemini-3.1-pro-preview"
+      ],
+      "Cost": [
+        0.08422,
+        0.138768
+      ],
+      "Prompt Tokens": [
+        19256,
+        45972
+      ],
+      "Completion Tokens": [
+        3809,
+        3902
+      ],
+      "Total Tokens": [
+        23065,
+        49874
+      ]
+    }
+  },
+  {
+    "name": "engineer_response_evaluator",
+    "content": "**Code Explanation:**\n\nThe code performs the Mechanical Viability Mapping and Robustness Check as outlined in Step 4. 1. Mechanical Viability Threshold: It calculates the viability threshold as the mean plus one standard deviation of the shear modulus (G_vrh) for the thermodynamically stable population. 2. Specific Shear Modulus: It computes the density (in g/cm^3) for each material using the atomic masses of the constituent elements and the volume_per_atom feature. The specific shear modulus is then calculated as G_vrh / density. 3. Candidate Prioritization: The 112 metastable candidates (where elasticity is unknown) are ranked based on four criteria: (1) energy_above_hull < 0.05 eV/atom, (2) predicted G_vrh > viability threshold, (3) theoretical flag (prioritizing unsynthesized materials), and (4) the predicted G_vrh score. 4. Leave-One-Metal-Out Robustness Check: For the top 10 prioritized candidates, the script identifies their unique transition metals. It then retrains the multi-task neural network from scratch, excluding all samples containing that specific metal from the training set. The retrained models are used to predict G_vrh for the top 10 candidates, and the percentage change relative to the original prediction is recorded. Candidates with a change > 20% are flagged. 5. Visualizations: A 2D probability map plots predicted G_vrh against energy_above_hull, color-coded by the Monte Carlo prediction uncertainty, with high-correlation sensitivity candidates highlighted. A secondary plot shows predicted G_vrh versus d_band_filling, distinguishing between stable and metastable phases. 6. Output: The final ranked list, including the robustness check results, is saved to data/prioritization_list.csv.\n\n**Modifications:**\n\nAdded if __name__ == '__main__': block, ensured all file paths use the data/ directory, removed LaTeX rendering, and ensured all imports are relative to the codebase folder.\n\n**Python Code:**\n\n```python\n# filename: codebase/step_4.py\nimport sys\nimport os\nsys.path.insert(0, os.path.abspath(\"codebase\"))\nimport pandas as pd\nimport numpy as np\nimport json\nimport torch\nimport matplotlib.pyplot as plt\nfrom datetime import datetime\nfrom sklearn.preprocessing import StandardScaler, MinMaxScaler\nfrom step_2 import train_model, set_seed\nfrom matplotlib.lines import Line2D\n\ndef main():\n    set_seed(42)\n    results_df = pd.read_csv('data/sensitivity_analysis_results.csv')\n    orig_df = pd.read_csv('/home/node/work/projects/materials_project_v1/tmd_data_enriched.csv')\n    stable_df = orig_df[orig_df['is_stable'] == True]\n    stable_g_vrh = stable_df['G_vrh'].dropna()\n    viability_threshold = stable_g_vrh.mean() + stable_g_vrh.std()\n    atomic_masses = {'Ti': 47.867, 'Zr': 91.224, 'Hf': 178.49, 'V': 50.9415, 'Nb': 92.906, 'Ta': 180.947, 'Cr': 51.996, 'Mo': 95.95, 'W': 183.84, 'Mn': 54.938, 'Fe': 55.845, 'Co': 58.933, 'Ni': 58.693, 'S': 32.06, 'Se': 78.971, 'Te': 127.6}\n    def get_density(row):\n        m_mass = atomic_masses[row['metal']]\n        x_mass = atomic_masses[row['chalcogen']]\n        formula_mass = m_mass + 2 * x_mass\n        density = formula_mass / (3 * 0.6022 * row['volume_per_atom'])\n        return density\n    results_df['density_g_cm3'] = results_df.apply(get_density, axis=1)\n    results_df['specific_shear_modulus'] = results_df['G_vrh_pred_mean'] / results_df['density_g_cm3']\n    unknown_candidates = results_df[results_df['is_known_elasticity'] == False].copy()\n    unknown_candidates['meets_eah_criteria'] = unknown_candidates['energy_above_hull'] < 0.05\n    unknown_candidates['meets_viability'] = unknown_candidates['G_vrh_pred_mean'] > viability_threshold\n    unknown_candidates['viability_score'] = unknown_candidates['G_vrh_pred_mean']\n    final_ranked_list = unknown_candidates.sort_values(by=['meets_eah_criteria', 'meets_viability', 'theoretical', 'viability_score'], ascending=[False, False, False, False])\n    top_10 = final_ranked_list.head(10).copy()\n    known_df = pd.read_csv('data/known_df_processed.csv')\n    unknown_df = pd.read_csv('data/unknown_df_processed.csv')\n    full_df = pd.concat([known_df, unknown_df], ignore_index=True)\n    with open('data/feature_list.json', 'r') as f:\n        feature_list = json.load(f)\n    X = full_df[feature_list].values\n    y_reg = full_df['G_vrh_norm'].values\n    y_clf = full_df['is_stable'].values\n    reg_mask = ~np.isnan(y_reg)\n    y_reg_safe = np.nan_to_num(y_reg, nan=0.0)\n    X_tensor = torch.tensor(X, dtype=torch.float32)\n    y_reg_tensor = torch.tensor(y_reg_safe, dtype=torch.float32)\n    y_clf_tensor = torch.tensor(y_clf, dtype=torch.float32)\n    reg_mask_tensor = torch.tensor(reg_mask, dtype=torch.float32)\n    protected_features = ['d_band_filling', 'en_difference']\n    protected_indices = [feature_list.index(f) for f in protected_features if f in feature_list]\n    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')\n    z_scaler = StandardScaler()\n    orig_known = orig_df[orig_df['G_vrh'].notna()].copy()\n    g_vrh_z = z_scaler.fit_transform(orig_known[['G_vrh']])\n    minmax_scaler = MinMaxScaler()\n    minmax_scaler.fit(g_vrh_z)\n    def unnormalize_g_vrh(g_vrh_norm):\n        shape = g_vrh_norm.shape\n        g_vrh_z_un = minmax_scaler.inverse_transform(g_vrh_norm.reshape(-1, 1))\n        g_vrh_un = z_scaler.inverse_transform(g_vrh_z_un)\n        return g_vrh_un.reshape(shape)\n    orig_full = pd.concat([orig_known, orig_df[orig_df['G_vrh'].isna()]], ignore_index=True)\n    full_metals = orig_full['metal'].values\n    unique_metals_in_top10 = top_10['metal'].unique()\n    metal_models = {}\n    for metal in unique_metals_in_top10:\n        keep_mask = full_metals != metal\n        X_train = X_tensor[keep_mask]\n        y_reg_train = y_reg_tensor[keep_mask]\n        y_clf_train = y_clf_tensor[keep_mask]\n        reg_mask_train = reg_mask_tensor[keep_mask]\n        model = train_model(X_train, y_reg_train, y_clf_train, reg_mask_train, protected_indices, epochs=300, lr=0.005, device=device)\n        model.eval()\n        metal_models[metal] = model\n    top_10['G_vrh_pred_lomo'] = np.nan\n    top_10['lomo_pct_change'] = np.nan\n    top_10['robustness_flag'] = False\n    for idx, row in top_10.iterrows():\n        metal = row['metal']\n        model = metal_models[metal]\n        mat_idx = orig_full.index[orig_full['material_id'] == row['material_id']].tolist()[0]\n        x_in = X_tensor[mat_idx:mat_idx+1].to(device)\n        with torch.no_grad():\n            reg_pred, _ = model(x_in)\n            reg_pred_norm = reg_pred.cpu().numpy()\n        pred_unnorm = unnormalize_g_vrh(reg_pred_norm)[0, 0]\n        orig_pred = row['G_vrh_pred_mean']\n        pct_change = abs(pred_unnorm - orig_pred) / orig_pred * 100\n        top_10.at[idx, 'G_vrh_pred_lomo'] = pred_unnorm\n        top_10.at[idx, 'lomo_pct_change'] = pct_change\n        top_10.at[idx, 'robustness_flag'] = pct_change > 20.0\n    final_ranked_list = final_ranked_list.merge(top_10[['material_id', 'G_vrh_pred_lomo', 'lomo_pct_change', 'robustness_flag']], on='material_id', how='left')\n    final_list_path = os.path.join('data', 'prioritization_list.csv')\n    final_ranked_list.to_csv(final_list_path, index=False)\n    plt.figure(figsize=(10, 7))\n    plt.rcParams['text.usetex'] = False\n    sc = plt.scatter(results_df['energy_above_hull'], results_df['G_vrh_pred_mean'], c=results_df['G_vrh_pred_std'], cmap='viridis', alpha=0.8, edgecolors='w', s=60)\n    high_corr = results_df[results_df['high_corr_sensitivity'] == True]\n    if len(high_corr) > 0:\n        plt.scatter(high_corr['energy_above_hull'], high_corr['G_vrh_pred_mean'], facecolors='none', edgecolors='red', s=100, linewidths=2, label='High-Corr Sensitivity')\n    plt.axhline(y=viability_threshold, color='r', linestyle='--', label='Viability Threshold')\n    plt.colorbar(sc, label='Prediction Uncertainty (Std Dev, GPa)')\n    plt.xlabel('Energy Above Hull (eV/atom)')\n    plt.ylabel('Predicted Shear Modulus G_vrh (GPa)')\n    plt.title('Mechanical Viability Map of TMDs')\n    plt.legend()\n    plt.grid(True, linestyle=':', alpha=0.7)\n    plt.tight_layout()\n    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')\n    plot1_path = os.path.join('data', 'mechanical_viability_map_4_' + timestamp + '.png')\n    plt.savefig(plot1_path, dpi=300)\n    plt.figure(figsize=(9, 6))\n    plt.scatter(results_df['d_band_filling'], results_df['G_vrh_pred_mean'], c=results_df['is_stable'].astype(int), cmap='coolwarm', alpha=0.7, edgecolors='k', s=60)\n    plt.axhline(y=viability_threshold, color='r', linestyle='--', label='Viability Threshold')\n    plt.xlabel('d-band Filling (fractional)')\n    plt.ylabel('Predicted Shear Modulus G_vrh (GPa)')\n    plt.title('Shear Modulus vs. d-band Filling')\n    custom_lines = [Line2D([0], [0], marker='o', color='w', markerfacecolor=plt.cm.coolwarm(0.0), markersize=10, markeredgecolor='k'), Line2D([0], [0], marker='o', color='w', markerfacecolor=plt.cm.coolwarm(1.0), markersize=10, markeredgecolor='k'), Line2D([0], [0], color='r', linestyle='--')]\n    plt.legend(custom_lines, ['Metastable', 'Stable', 'Viability Threshold'])\n    plt.grid(True, linestyle=':', alpha=0.7)\n    plt.tight_layout()\n    plot2_path = os.path.join('data', 'g_vrh_vs_dband_filling_4_' + timestamp + '.png')\n    plt.savefig(plot2_path, dpi=300)\n\nif __name__ == '__main__':\n    main()\n```",
+    "timestamp": "2026-04-14 20:53:11",
+    "cost": {
+      "Agent": [
+        "engineer_response_evaluator",
+        "engineer_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.0070272500000000005,
+        0.014967500000000002
+      ],
+      "Prompt Tokens": [
+        8651,
+        20954
+      ],
+      "Completion Tokens": [
+        3243,
+        6486
+      ],
+      "Total Tokens": [
+        11894,
+        27440
+      ]
+    }
+  },
+  {
+    "name": "executor",
+    "content": "Execution results:\n\nExecution output: \n",
+    "timestamp": "2026-04-14 20:53:28",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "execution_recorder",
+    "content": "Code execution recorded.\n\nExecution output:\nExecution results:\n\nExecution output: \n",
+    "timestamp": "2026-04-14 20:53:28",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "executor_response_evaluator",
+    "content": "",
+    "timestamp": "2026-04-14 20:53:29",
+    "cost": {
+      "Agent": [
+        "executor_response_evaluator",
+        "executor_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.00022999999999999998,
+        0.00045999999999999996
+      ],
+      "Prompt Tokens": [
+        740,
+        1480
+      ],
+      "Completion Tokens": [
+        30,
+        60
+      ],
+      "Total Tokens": [
+        770,
+        1540
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "Code execution status: success. Transfer to controller to evaluate step progress.\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nWorkflow status:\n\nPlan step number: 4\n\nAgent for sub-task (might be different from the next agent suggestion for debugging): engineer\n\nStep status (before execution): in progress\n\nCode status: success\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\n",
+    "timestamp": "2026-04-14 20:53:29",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "controller",
+    "content": "",
+    "timestamp": "2026-04-14 20:53:30",
+    "cost": {
+      "Agent": [
+        "controller",
+        "controller"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.0033190000000000003,
+        0.0033405
+      ],
+      "Prompt Tokens": [
+        13162,
+        13254
+      ],
+      "Completion Tokens": [
+        19,
+        18
+      ],
+      "Total Tokens": [
+        13181,
+        13272
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "\n**Step number:** 4 out of 5.\n\n**Sub-task:** Mechanical Viability Mapping and Robustness Check\n\n**Agent in charge of sub-task:** `engineer`\n\n**Instructions:**\n\n- Compute 'Mechanical Viability' threshold (mean + 1 std of stable population G_vrh) and 'Specific Shear Modulus' (using density from volume_per_atom and molar mass)\n- Perform 'leave-one-metal-out' robustness check on the top 10 candidates (retrain model excluding each metal, record changes in predicted G_vrh, flag candidates with >20% change)\n- Generate a 2D probability map (predicted G_vrh vs. energy_above_hull, color-coded by uncertainty, marker-coded by sensitivity flag)\n- Generate a secondary plot of G_vrh vs. d_band_filling\n- Rank/save the final prioritization list (CSV)\n\n**Step status:** completed \u2705\n\n**Code status:** success\n\n**Step iteration:** 0/10\n        ",
+    "timestamp": "2026-04-14 20:53:30",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "terminator",
+    "content": "TERMINATE",
+    "timestamp": "2026-04-14 20:53:30",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  }
+]

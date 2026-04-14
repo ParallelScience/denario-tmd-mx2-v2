@@ -1,0 +1,64 @@
+{
+    "sub_tasks": [
+        {
+            "bullet_points": [
+                "Load the dataset",
+                "Split into 'Elasticity-Known' (90) and 'Elasticity-Unknown' (112) subsets",
+                "Print dataset statistics (missing values, G_vrh distribution)",
+                "Perform iterative imputation for dos_at_fermi using a BayesianRidge estimator (fit only on training folds)",
+                "One-hot encode categorical features (magnetic_ordering, crystal_system, phase)",
+                "Standardize continuous features",
+                "Z-score normalize G_vrh",
+                "Save the processed datasets and feature list"
+            ],
+            "sub_task": "Data Preprocessing and Imputation",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Construct a neural network with a shared feature extraction backbone and two output heads (regression for G_vrh, classification for is_stable)",
+                "Implement homoscedastic uncertainty weighting",
+                "Train using LOGO cross-validation (grouped by 'Periodic Table Group')",
+                "Record/print per-fold metrics (MAE, RMSE, R², accuracy, ROC-AUC) and the correlation between predicted G_vrh and energy_above_hull",
+                "Retrain the final model on the full 90-sample dataset",
+                "Save the learned uncertainty weights (sigma_1, sigma_2)"
+            ],
+            "sub_task": "Multi-Task Model Training",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Perform Monte Carlo sensitivity analysis (500 forward passes, fixed seed) with jittered input features",
+                "Calculate per-sample mean/std of predicted G_vrh",
+                "Calculate the 'High-Correlation Sensitivity' flag (threshold: d_band_filling > 0.5, magnetic ordering in [FM, FiM])",
+                "Generate a plot of uncertainty (std of MC predictions) vs. d_band_filling",
+                "Save uncertainty metrics and sensitivity flags"
+            ],
+            "sub_task": "Sensitivity and Uncertainty Analysis",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Compute 'Mechanical Viability' threshold (mean + 1 std of stable population G_vrh) and 'Specific Shear Modulus' (using density from volume_per_atom and molar mass)",
+                "Perform 'leave-one-metal-out' robustness check on the top 10 candidates (retrain model excluding each metal, record changes in predicted G_vrh, flag candidates with >20% change)",
+                "Generate a 2D probability map (predicted G_vrh vs. energy_above_hull, color-coded by uncertainty, marker-coded by sensitivity flag)",
+                "Generate a secondary plot of G_vrh vs. d_band_filling",
+                "Rank/save the final prioritization list (CSV)"
+            ],
+            "sub_task": "Mechanical Viability Mapping and Robustness Check",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Synthesize findings from the mechanical viability mapping and sensitivity analysis",
+                "Report quantitative cross-validation metrics",
+                "Discuss learned uncertainty weights",
+                "Interpret the MC uncertainty map and leave-one-metal-out robustness check results",
+                "Provide a physical narrative connecting d_band_filling, magnetic ordering, and mechanical softening",
+                "Write the full Results section of the report, summarizing model performance, identified candidates, and synthesis novelty status"
+            ],
+            "sub_task": "Final Robustness Check and Results Reporting",
+            "sub_task_agent": "researcher"
+        }
+    ]
+}
