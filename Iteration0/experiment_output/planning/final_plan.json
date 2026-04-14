@@ -1,0 +1,68 @@
+{
+    "sub_tasks": [
+        {
+            "bullet_points": [
+                "Load the dataset from the provided path.",
+                "Perform one-hot encoding on magnetic_ordering and phase, and ordinal encoding on crystal_system.",
+                "Standardize all continuous features (e.g., c_a_ratio, volume_per_atom, energy_above_hull, d_band_filling, en_difference, M_soc_proxy).",
+                "Save the processed dataframe (with missing dos_at_fermi values preserved) to a CSV file, ensuring the raw features required for KNN imputation (band_gap, M_val, X_period, phase) are included."
+            ],
+            "sub_task": "Data Preprocessing and Feature Engineering",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Calculate the median G_vrh per phase within the subset of 90 materials where elastic data is available.",
+                "Create the binary target is_robust (1 if G_vrh > median, 0 otherwise).",
+                "Perform Spearman rank correlation analysis between is_robust and key descriptors.",
+                "Generate a bar chart of Spearman correlation coefficients ranked by absolute value.",
+                "Generate pair-plots for specific feature pairs: d_band_filling vs. en_difference, dos_at_fermi vs. volume_per_atom, and M_soc_proxy vs. c_a_ratio, colored by is_robust.",
+                "Save the correlation matrix, bar chart, and pair-plots."
+            ],
+            "sub_task": "Target Definition and Exploratory Correlation Analysis",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Construct a Pipeline that includes a KNNImputer for dos_at_fermi and a RandomForestClassifier.",
+                "Implement Repeated Stratified K-Fold Cross-Validation (5-fold, 10 repeats) to optimize hyperparameters (n_estimators, max_depth, min_samples_split) using AUPRC.",
+                "Ensure the KNNImputer is fit only on training folds within the cross-validation loop.",
+                "Re-fit the final model on the full 90-sample elastic dataset using the best hyperparameters.",
+                "Save the trained model, best hyperparameters, and the mean/std of AUPRC, ROC-AUC, and balanced accuracy to a results file."
+            ],
+            "sub_task": "Model Training and Handling Class Imbalance",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Calculate Permutation Feature Importance on held-out cross-validation folds, averaging importance scores and calculating standard deviations across folds.",
+                "Generate a bar chart of feature importance with error bars.",
+                "Generate Partial Dependence Plots (PDPs) for d_band_filling, en_difference, and dos_at_fermi.",
+                "Save the importance rankings and PDP figures."
+            ],
+            "sub_task": "Feature Importance and Sensitivity Analysis",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Predict the probability of is_robust for the 112 metastable candidates using the final model.",
+                "Produce a ranked probability table (CSV) including material_id, formula, metal, chalcogen, phase, energy_above_hull, and the predicted is_robust probability.",
+                "Generate a scatter plot of predicted is_robust probability versus energy_above_hull, colored by phase, with reference lines for the dual-filter thresholds (probability > 0.8, energy_above_hull < 0.05 eV/atom).",
+                "Save the table and the scatter plot."
+            ],
+            "sub_task": "Inference on Metastable Candidates",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Report all numerical cross-validation metrics (mean AUPRC, mean ROC-AUC, mean balanced accuracy with standard deviations).",
+                "Interpret the correlation analysis and top-ranked features from the permutation importance analysis.",
+                "Discuss the physical significance of the \"mechanical viability\" boundary, connecting d_band_filling and en_difference trends to known TMD chemistry.",
+                "Summarize the screening outcome, including the number and identities of candidates passing the dual filter.",
+                "Write the full Results section of the paper."
+            ],
+            "sub_task": "Results Interpretation and Reporting",
+            "sub_task_agent": "researcher"
+        }
+    ]
+}

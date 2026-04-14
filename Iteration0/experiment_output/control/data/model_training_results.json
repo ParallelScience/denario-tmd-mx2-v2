@@ -1,0 +1,46 @@
+{
+    "best_hyperparameters": {
+        "rf__max_depth": 10,
+        "rf__min_samples_split": 2,
+        "rf__n_estimators": 100
+    },
+    "metrics": {
+        "AUPRC": {
+            "mean": 0.7827274542813758,
+            "std": 0.09826700132061408
+        },
+        "ROC_AUC": {
+            "mean": 0.7545000000000001,
+            "std": 0.09513608333452082
+        },
+        "Balanced_Accuracy": {
+            "mean": 0.6621111111111111,
+            "std": 0.09427846526299459
+        }
+    },
+    "features": [
+        "band_gap",
+        "M_val",
+        "X_period",
+        "crystal_system",
+        "c_a_ratio",
+        "volume_per_atom",
+        "energy_above_hull",
+        "d_band_filling",
+        "en_difference",
+        "dos_at_fermi",
+        "M_soc_proxy",
+        "magnetic_ordering_AFM",
+        "magnetic_ordering_FM",
+        "magnetic_ordering_FiM",
+        "magnetic_ordering_NM",
+        "phase_1T",
+        "phase_1T'",
+        "phase_2H",
+        "phase_2H-like",
+        "phase_3R",
+        "phase_CDW/distorted",
+        "phase_cubic",
+        "phase_other"
+    ]
+}
