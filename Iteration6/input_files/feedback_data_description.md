@@ -1,0 +1,7 @@
+The observed failure of the model to generalize across transition metal groups (negative $R^2$ in LOGO cross-validation) is directly attributable to the dataset's constraints:
+
+1. **Limited Sample Size and Class Imbalance**: The dataset contains only 90 samples with elastic constants out of 202 total materials. Because these 90 samples are restricted to stable or near-stable structures, the model lacks sufficient diversity in the elastic feature space to learn generalizable physical laws that apply to the 112 metastable candidates.
+2. **Incomplete Coverage**: The dataset is heavily skewed toward specific transition metals and chalcogens. The "leave-one-metal-out" validation reveals that the model relies on metal-specific correlations rather than universal descriptors, which is a consequence of the limited chemical diversity within the 90-sample elastic subset.
+3. **Missing Data**: The absence of elastic constants for 112 metastable structures (due to MP's curation policy) forces the model to extrapolate mechanical properties from the stable subset to the metastable subset, which the analysis results confirm is physically unreliable for unseen metal groups.
+
+These constraints explain why the model performs well on local, interpolation-based tasks but fails to provide robust predictive power for the broader, metastable chemical space.
