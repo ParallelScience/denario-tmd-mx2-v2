@@ -4,93 +4,149 @@ import os
 sys.path.insert(0, os.path.abspath("codebase"))
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import LeaveOneGroupOut
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import json
 import joblib
-
-if __name__ == '__main__':
-    data_dir = 'data'
-    data_path = os.path.join(data_dir, 'processed_tmd_data.csv')
-    df = pd.read_csv(data_path)
-    encoded_cols = [col for col in df.columns if col.startswith('crystal_system_') or col.startswith('phase_') or col.startswith('magnetic_ordering_')]
-    base_features = ['d_band_filling', 'en_difference', 'dos_at_fermi', 'c_a_ratio', 'M_soc_proxy', 'M_group'] + encoded_cols
-    features_with_missing = base_features + ['is_dos_missing']
-    if df['c_a_ratio'].isna().sum() > 0:
-        df['c_a_ratio'] = df['c_a_ratio'].fillna(df['c_a_ratio'].mean())
-    df_reg = df.dropna(subset=['pugh_ratio']).copy()
-    groups = df_reg['metal'].values
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from sklearn.model_selection import LeaveOneGroupOut
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.ensemble import RandomForestRegressor
+from step_2 import MultiTaskNN
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+def set_seed(seed=42):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+def train_nn_with_seed(X_cont, X_bin, X_group, y_reg, y_clf, mask_reg, seed=42, epochs=300, lr=0.005, weight_decay=1e-3):
+    set_seed(seed)
+    model = MultiTaskNN(X_cont.shape[1], X_bin.shape[1]).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    criterion_reg = nn.MSELoss()
+    criterion_clf = nn.BCEWithLogitsLoss()
+    X_cont_t = torch.tensor(X_cont, dtype=torch.float32).to(device)
+    X_bin_t = torch.tensor(X_bin, dtype=torch.float32).to(device)
+    X_group_t = torch.tensor(X_group, dtype=torch.long).to(device)
+    y_reg_t = torch.tensor(y_reg, dtype=torch.float32).unsqueeze(1).to(device)
+    y_clf_t = torch.tensor(y_clf, dtype=torch.float32).unsqueeze(1).to(device)
+    mask_reg_t = torch.tensor(mask_reg, dtype=torch.bool).to(device)
+    model.train()
+    for epoch in range(epochs):
+        optimizer.zero_grad()
+        reg_out, clf_out = model(X_cont_t, X_bin_t, X_group_t)
+        loss_clf = criterion_clf(clf_out, y_clf_t)
+        if mask_reg_t.sum() > 0:
+            loss_reg = criterion_reg(reg_out[mask_reg_t], y_reg_t[mask_reg_t])
+            loss = loss_reg + loss_clf
+        else:
+            loss = loss_clf
+        loss.backward()
+        optimizer.step()
+    return model
+def evaluate_cv(df, continuous_features, binary_features, model_type):
+    groups = df['metal'].values
     logo = LeaveOneGroupOut()
-    def evaluate_features(features_list):
-        all_y_true = []
-        all_y_pred = []
-        for train_idx, test_idx in logo.split(df_reg, groups=groups):
-            train_df = df_reg.iloc[train_idx].copy()
-            test_df = df_reg.iloc[test_idx].copy()
-            dos_mean = train_df['dos_at_fermi'].mean()
-            train_df['dos_at_fermi'] = train_df['dos_at_fermi'].fillna(dos_mean)
-            test_df['dos_at_fermi'] = test_df['dos_at_fermi'].fillna(dos_mean)
-            X_train = train_df[features_list]
-            y_train = train_df['pugh_ratio']
-            X_test = test_df[features_list]
-            y_test = test_df['pugh_ratio']
-            rf = RandomForestRegressor(n_estimators=100, random_state=42)
-            rf.fit(X_train, y_train)
-            y_pred = rf.predict(X_test)
-            all_y_true.extend(y_test)
-            all_y_pred.extend(y_pred)
-        mae = mean_absolute_error(all_y_true, all_y_pred)
-        rmse = np.sqrt(mean_squared_error(all_y_true, all_y_pred))
-        r2 = r2_score(all_y_true, all_y_pred)
-        return mae, rmse, r2
-    print('--- Sensitivity Analysis on Missing Data ---')
-    mae_without, rmse_without, r2_without = evaluate_features(base_features)
-    print('Performance WITHOUT is_dos_missing:')
-    print('  MAE:  ' + str(round(mae_without, 4)))
-    print('  RMSE: ' + str(round(rmse_without, 4)))
-    print('  R2:   ' + str(round(r2_without, 4)))
-    mae_with, rmse_with, r2_with = evaluate_features(features_with_missing)
-    print('\nPerformance WITH is_dos_missing:')
-    print('  MAE:  ' + str(round(mae_with, 4)))
-    print('  RMSE: ' + str(round(rmse_with, 4)))
-    print('  R2:   ' + str(round(r2_with, 4)))
-    print('\n--- Training Ensemble for Epistemic Uncertainty ---')
-    n_models = 10
+    y_true = []
+    y_pred = []
+    for train_idx, test_idx in logo.split(df, groups=groups):
+        df_train = df.iloc[train_idx].copy()
+        df_test = df.iloc[test_idx].copy()
+        dos_mean = df_train['dos_at_fermi'].mean()
+        df_train['dos_at_fermi'] = df_train['dos_at_fermi'].fillna(dos_mean)
+        df_test['dos_at_fermi'] = df_test['dos_at_fermi'].fillna(dos_mean)
+        mask_reg_train = df_train['pugh_ratio'].notna()
+        mask_reg_test = df_test['pugh_ratio'].notna()
+        if mask_reg_test.sum() == 0:
+            continue
+        if model_type == 'RandomForest':
+            X_train = pd.concat([df_train[continuous_features], df_train[binary_features], df_train[['M_group_bin']]], axis=1)
+            X_test = pd.concat([df_test[continuous_features], df_test[binary_features], df_test[['M_group_bin']]], axis=1)
+            rf_reg = RandomForestRegressor(n_estimators=100, random_state=42)
+            rf_reg.fit(X_train[mask_reg_train], df_train.loc[mask_reg_train, 'pugh_ratio'])
+            preds = rf_reg.predict(X_test[mask_reg_test])
+        else:
+            scaler = StandardScaler()
+            X_cont_train = scaler.fit_transform(df_train[continuous_features])
+            X_cont_test = scaler.transform(df_test[continuous_features])
+            X_bin_train = df_train[binary_features].values
+            X_bin_test = df_test[binary_features].values
+            X_group_train = df_train['M_group_bin'].values
+            X_group_test = df_test['M_group_bin'].values
+            y_reg_train = df_train['pugh_ratio'].fillna(0).values
+            mask_reg_train_vals = mask_reg_train.values
+            y_clf_train = df_train['is_stable'].astype(float).values
+            model = train_nn_with_seed(X_cont_train, X_bin_train, X_group_train, y_reg_train, y_clf_train, mask_reg_train_vals, seed=42, epochs=300, lr=0.005)
+            model.eval()
+            with torch.no_grad():
+                reg_out, _ = model(torch.tensor(X_cont_test, dtype=torch.float32).to(device), torch.tensor(X_bin_test, dtype=torch.float32).to(device), torch.tensor(X_group_test, dtype=torch.long).to(device))
+            preds = reg_out.cpu().numpy().flatten()[mask_reg_test.values]
+        y_true.extend(df_test.loc[mask_reg_test, 'pugh_ratio'].values)
+        y_pred.extend(preds)
+    mae = mean_absolute_error(y_true, y_pred)
+    r2 = r2_score(y_true, y_pred)
+    return mae, r2
+def main():
+    data_path = os.path.join("data", "processed_tmd_data.csv")
+    df = pd.read_csv(data_path)
+    metrics_path = os.path.join("data", "logo_cv_metrics.json")
+    with open(metrics_path, "r") as f:
+        metrics = json.load(f)
+    model_type = metrics.get("model_type", "RandomForest")
+    continuous_features = ['d_band_filling', 'en_difference', 'dos_at_fermi', 'c_a_ratio', 'M_soc_proxy']
+    binary_features_with = ['is_dos_missing'] + [c for c in df.columns if c.startswith('crystal_system_') or c.startswith('phase_') or c.startswith('magnetic_ordering_')]
+    binary_features_without = [c for c in df.columns if c.startswith('crystal_system_') or c.startswith('phase_') or c.startswith('magnetic_ordering_')]
+    if 'M_group_bin' not in df.columns:
+        df['M_group_bin'] = (df['M_group'] >= 8).astype(int)
+    print("Evaluating sensitivity to missing DOS indicator using " + model_type + "...")
+    mae_with, r2_with = evaluate_cv(df, continuous_features, binary_features_with, model_type)
+    mae_without, r2_without = evaluate_cv(df, continuous_features, binary_features_without, model_type)
+    print("\n--- Sensitivity Analysis on Missing Data ---")
+    print(f"{'Model Configuration':<30} | {'MAE':<10} | {'R2':<10}")
+    print("-" * 56)
+    print(f"{'With is_dos_missing':<30} | {mae_with:<10.4f} | {r2_with:<10.4f}")
+    print(f"{'Without is_dos_missing':<30} | {mae_without:<10.4f} | {r2_without:<10.4f}")
+    print("-" * 56)
+    print("\nTraining ensemble of 10 " + model_type + " models...")
     ensemble_models = []
-    dos_mean_full = df['dos_at_fermi'].mean()
-    df_imputed = df.copy()
-    df_imputed['dos_at_fermi'] = df_imputed['dos_at_fermi'].fillna(dos_mean_full)
-    df_reg_imputed = df_imputed.dropna(subset=['pugh_ratio']).copy()
-    X_train_full = df_reg_imputed[features_with_missing]
-    y_train_full = df_reg_imputed['pugh_ratio']
-    for i in range(n_models):
-        rf = RandomForestRegressor(n_estimators=100, random_state=i*42)
-        rf.fit(X_train_full, y_train_full)
-        ensemble_models.append(rf)
-    print('Trained ' + str(n_models) + ' RandomForest models with different seeds.')
-    X_all = df_imputed[features_with_missing]
-    predictions = np.zeros((len(df_imputed), n_models))
-    for i, model in enumerate(ensemble_models):
-        predictions[:, i] = model.predict(X_all)
-    mean_preds = np.mean(predictions, axis=1)
-    std_preds = np.std(predictions, axis=1)
-    df_imputed['mean_pugh_prediction'] = mean_preds
-    df_imputed['epistemic_uncertainty'] = std_preds
-    output_cols = ['material_id', 'formula', 'metal', 'chalcogen', 'energy_above_hull', 'is_stable', 'mean_pugh_prediction', 'epistemic_uncertainty', 'dos_at_fermi', 'is_dos_missing']
-    additional_cols = ['d_band_filling', 'en_difference', 'theoretical'] + encoded_cols
-    for col in additional_cols:
-        if col in df_imputed.columns and col not in output_cols:
-            output_cols.append(col)
-    uncertainty_df = df_imputed[output_cols]
-    output_path = os.path.join(data_dir, 'uncertainty_metrics.csv')
-    uncertainty_df.to_csv(output_path, index=False)
-    ensemble_path = os.path.join(data_dir, 'ensemble_models.joblib')
-    joblib.dump({'models': ensemble_models, 'features': features_with_missing}, ensemble_path)
-    print('\nUncertainty metrics saved to: ' + output_path)
-    print('Ensemble models saved to: ' + ensemble_path)
-    print('\nSummary of Epistemic Uncertainty:')
-    print(uncertainty_df['epistemic_uncertainty'].describe().to_string())
-    print('\nTop 5 candidates with highest uncertainty:')
-    print(uncertainty_df[['formula', 'metal', 'chalcogen', 'mean_pugh_prediction', 'epistemic_uncertainty']].sort_values('epistemic_uncertainty', ascending=False).head(5).to_string(index=False))
-    print('\nTop 5 candidates with lowest uncertainty:')
-    print(uncertainty_df[['formula', 'metal', 'chalcogen', 'mean_pugh_prediction', 'epistemic_uncertainty']].sort_values('epistemic_uncertainty', ascending=True).head(5).to_string(index=False))
+    predictions = np.zeros((len(df), 10))
+    df_full = df.copy()
+    dos_mean_full = df_full['dos_at_fermi'].mean()
+    df_full['dos_at_fermi'] = df_full['dos_at_fermi'].fillna(dos_mean_full)
+    mask_reg_full = df_full['pugh_ratio'].notna()
+    if model_type == 'RandomForest':
+        X_full = pd.concat([df_full[continuous_features], df_full[binary_features_with], df_full[['M_group_bin']]], axis=1)
+        y_reg_full = df_full.loc[mask_reg_full, 'pugh_ratio']
+        for i in range(10):
+            rf_reg = RandomForestRegressor(n_estimators=100, random_state=i)
+            rf_reg.fit(X_full[mask_reg_full], y_reg_full)
+            preds = rf_reg.predict(X_full)
+            predictions[:, i] = preds
+            ensemble_models.append(rf_reg)
+        scaler_full = None
+    else:
+        scaler_full = StandardScaler()
+        X_cont_full = scaler_full.fit_transform(df_full[continuous_features])
+        X_bin_full = df_full[binary_features_with].values
+        X_group_full = df_full['M_group_bin'].values
+        y_reg_full = df_full['pugh_ratio'].fillna(0).values
+        mask_reg_full_vals = mask_reg_full.values
+        y_clf_full = df_full['is_stable'].astype(float).values
+        for i in range(10):
+            model = train_nn_with_seed(X_cont_full, X_bin_full, X_group_full, y_reg_full, y_clf_full, mask_reg_full_vals, seed=i, epochs=300, lr=0.005)
+            model.eval()
+            with torch.no_grad():
+                reg_out, _ = model(torch.tensor(X_cont_full, dtype=torch.float32).to(device), torch.tensor(X_bin_full, dtype=torch.float32).to(device), torch.tensor(X_group_full, dtype=torch.long).to(device))
+            preds = reg_out.cpu().numpy().flatten()
+            predictions[:, i] = preds
+            ensemble_models.append(model.cpu().state_dict())
+    mean_preds = predictions.mean(axis=1)
+    std_preds = predictions.std(axis=1)
+    df_uncertainty = pd.DataFrame({'material_id': df['material_id'], 'mean_pred_pugh_ratio': mean_preds, 'std_pred_pugh_ratio': std_preds})
+    uncertainty_path = os.path.join("data", "uncertainty_metrics.csv")
+    df_uncertainty.to_csv(uncertainty_path, index=False)
+    print("\nEnsemble predictions saved to: " + uncertainty_path)
+    ensemble_save_path = os.path.join("data", "ensemble_models.joblib")
+    joblib.dump({'models': ensemble_models, 'model_type': model_type, 'dos_mean': dos_mean_full, 'features': continuous_features + binary_features_with + ['M_group_bin'] if model_type == 'RandomForest' else None, 'continuous_features': continuous_features if model_type != 'RandomForest' else None, 'binary_features': binary_features_with if model_type != 'RandomForest' else None, 'scaler': scaler_full}, ensemble_save_path)
+    print("Ensemble models saved to: " + ensemble_save_path)
+if __name__ == '__main__':
+    main()

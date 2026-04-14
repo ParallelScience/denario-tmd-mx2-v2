@@ -3,53 +3,54 @@
         {
             "bullet_points": [
                 "Load the dataset from the provided path.",
-                "Calculate Pugh's ratio ($G_{vrh} / K_{vrh}$) as the target variable for the 90 samples where elastic data is available.",
+                "Calculate Pugh's ratio ($G_{vrh} / K_{vrh}$) as the target variable for the 90 samples with elastic data.",
                 "Create a binary indicator `is_dos_missing` for samples lacking `dos_at_fermi`.",
-                "Create a binary risk flag `is_high_energy` for samples with `energy_above_hull` > 0.05 eV/atom.",
-                "Encode `crystal_system`, `phase`, and `magnetic_ordering` using one-hot encoding.",
-                "Retain `c_a_ratio` and `M_soc_proxy` as numerical features.",
-                "Save the cleaned and feature-engineered dataset to a CSV file."
+                "Perform mean imputation for `dos_at_fermi` using training-fold statistics during cross-validation (to be implemented in the modeling step).",
+                "One-hot encode `crystal_system` and `phase`.",
+                "Encode `magnetic_ordering` as numeric/one-hot and include `c_a_ratio` as a feature.",
+                "Create a binary flag for `energy_above_hull` > 0.05 eV/atom.",
+                "Save the cleaned dataset to a CSV file."
             ],
             "sub_task": "Load the dataset, perform feature engineering, and save the processed dataframe.",
             "sub_task_agent": "engineer"
         },
         {
             "bullet_points": [
-                "Implement a multi-task model where a shared backbone extracts features from the full 202-sample set.",
-                "Train the regression head for Pugh's ratio using only the 90-sample elastic subset.",
-                "Train the classification head for `is_stable` using the full 202-sample set to regularize the backbone.",
+                "Implement a shallow neural network with a shared backbone, a regression head for Pugh's ratio, and a classification head for `is_stable`.",
+                "Include a Group Embedding layer for transition metal groups (4–7 vs. 8–10).",
                 "Implement Leave-One-Group-Out (LOGO) cross-validation, grouping by transition metal.",
-                "Print and save per-fold and aggregate LOGO cross-validation metrics (MAE, RMSE, R²) to a results file.",
-                "Save the trained model."
+                "Report regression (MAE, RMSE, R²) and classification (AUC, accuracy) metrics separately.",
+                "Use Random Forest as a fallback if neural network performance is insufficient.",
+                "Save the trained model and cross-validation predictions."
             ],
-            "sub_task": "Train a multi-task model to predict Pugh's ratio and stability.",
+            "sub_task": "Train a multi-task shallow neural network with a shared backbone.",
             "sub_task_agent": "engineer"
         },
         {
             "bullet_points": [
-                "Compare model performance with and without the `is_dos_missing` indicator.",
-                "Train an ensemble of at least 10 models (e.g., random forests with different seeds).",
-                "Define epistemic uncertainty as the standard deviation of predictions across ensemble members.",
-                "Save the uncertainty metrics for each candidate."
+                "Compare model performance (MAE, R²) with and without the `is_dos_missing` indicator using a comparison table.",
+                "Train a Deep Ensemble of at least 10 models with different random seeds.",
+                "Save per-sample mean prediction and standard deviation (uncertainty) to a CSV."
             ],
             "sub_task": "Perform sensitivity analysis on missing data and estimate epistemic uncertainty.",
             "sub_task_agent": "engineer"
         },
         {
             "bullet_points": [
-                "Calculate SHAP values to identify the influence of `d_band_filling`, `en_difference`, and `dos_at_fermi`.",
-                "Generate and save a SHAP summary beeswarm/bar plot.",
-                "Generate and save individual SHAP dependence plots for `d_band_filling`, `en_difference`, and `dos_at_fermi`."
+                "Compute SHAP values on the final model using the 90-sample elastic subset as background.",
+                "Generate a SHAP beeswarm summary plot and a SHAP dependence plot for `d_band_filling` vs. `dos_at_fermi`.",
+                "Print the top-5 features by mean absolute SHAP value to the console."
             ],
             "sub_task": "Compute SHAP values to interpret the model's predictions.",
             "sub_task_agent": "engineer"
         },
         {
             "bullet_points": [
-                "Calculate the composite viability score $S = \\text{Predicted}(G/K) \\times \\text{Uncertainty}^{-1}$.",
-                "Flag and exclude materials with `dos_at_fermi` values > 3 standard deviations from the training mean.",
-                "Generate a 2D probability map (Pugh's ratio vs. `energy_above_hull`) highlighting the 0.05 eV/atom threshold.",
-                "Rank candidates and save a table including: formula, metal, chalcogen, phase, predicted G/K, uncertainty, viability score, and `energy_above_hull`."
+                "Filter out candidates with `dos_at_fermi` > 3 standard deviations from the mean.",
+                "Calculate the composite viability score $S = \\text{mean\\_predicted\\_pugh\\_ratio} / \\text{std\\_across\\_ensemble}$.",
+                "Generate a 2D probability map (Pugh's ratio vs. `energy_above_hull`), distinguishing `theoretical` status.",
+                "Perform a leave-one-metal-out sensitivity check on the top 10 candidates.",
+                "Save the final ranked list of candidates."
             ],
             "sub_task": "Generate the viability map and rank candidates.",
             "sub_task_agent": "engineer"
@@ -57,10 +58,9 @@
         {
             "bullet_points": [
                 "Synthesize findings from model performance, SHAP analysis, and candidate prioritization.",
-                "Interpret the physical significance of stability boundaries and the role of electronic features.",
-                "Discuss the leave-one-metal-out sensitivity check results.",
-                "Name and justify the top 3 candidates selected for PBE+U elastic tensor verification, grounding recommendations in viability scores and SHAP-derived physical reasoning.",
-                "Reference all plots and statistics generated in previous steps."
+                "Quote all key numerical results: LOGO metrics, sensitivity analysis table, top-5 SHAP features, and top-ranked candidates.",
+                "Discuss the physical interpretation of the `d_band_filling` vs. `dos_at_fermi` interaction.",
+                "Connect predictions to solid-state chemistry trends and discuss implications for experimental synthesis."
             ],
             "sub_task": "Write the final results section of the report.",
             "sub_task_agent": "researcher"

@@ -6,69 +6,85 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
+import joblib
 
-if __name__ == '__main__':
-    plt.rcParams['text.usetex'] = False
+plt.rcParams['text.usetex'] = False
+
+def main():
     data_dir = 'data'
-    uncertainty_path = os.path.join(data_dir, 'uncertainty_metrics.csv')
-    processed_path = os.path.join(data_dir, 'processed_tmd_data.csv')
-    original_path = '/home/node/work/projects/materials_project_v1/tmd_data_enriched.csv'
-    df_unc = pd.read_csv(uncertainty_path)
-    df_proc = pd.read_csv(processed_path)
-    df_orig = pd.read_csv(original_path)
-    df = df_unc.merge(df_proc[['material_id', 'pugh_ratio']], on='material_id', how='left')
-    df = df.merge(df_orig[['material_id', 'phase']], on='material_id', how='left')
-    df['viability_score'] = df['mean_pugh_prediction'] / df['epistemic_uncertainty']
-    train_mask = df['pugh_ratio'].notna()
-    dos_train_mean = df.loc[train_mask, 'dos_at_fermi'].mean()
-    dos_train_std = df.loc[train_mask, 'dos_at_fermi'].std()
-    dos_threshold = dos_train_mean + 3 * dos_train_std
-    print('Training DOS at Fermi - Mean: ' + str(round(dos_train_mean, 4)) + ' states/eV, Std: ' + str(round(dos_train_std, 4)) + ' states/eV')
-    print('Exclusion threshold (Mean + 3*Std): ' + str(round(dos_threshold, 4)) + ' states/eV')
-    df['is_dos_outlier'] = df['dos_at_fermi'] > dos_threshold
-    num_outliers = df['is_dos_outlier'].sum()
-    print('Number of materials flagged as DOS outliers: ' + str(num_outliers))
-    candidates_mask = df['pugh_ratio'].isna()
-    df_candidates = df[candidates_mask].copy()
-    print('Total candidates (no original elastic data): ' + str(len(df_candidates)))
-    df_candidates_filtered = df_candidates[~df_candidates['is_dos_outlier']].copy()
-    print('Candidates after excluding DOS outliers: ' + str(len(df_candidates_filtered)))
-    df_candidates_ranked = df_candidates_filtered.sort_values(by='viability_score', ascending=False)
-    output_cols = ['material_id', 'formula', 'metal', 'chalcogen', 'phase', 'mean_pugh_prediction', 'epistemic_uncertainty', 'viability_score', 'energy_above_hull', 'theoretical']
-    ranked_path = os.path.join(data_dir, 'ranked_candidates.csv')
-    df_candidates_ranked[output_cols].to_csv(ranked_path, index=False)
-    print('Ranked candidates saved to: ' + ranked_path)
-    print('\n--- Top 10 Candidates by Viability Score (Overall) ---')
-    print(df_candidates_ranked[output_cols].head(10).to_string(index=False))
-    print('\n--- Top 10 Candidates satisfying Stability-Robustness filter (energy_above_hull <= 0.05 eV/atom) and theoretical == True ---')
-    robust_mask = (df_candidates_ranked['energy_above_hull'] <= 0.05) & (df_candidates_ranked['theoretical'] == True)
-    print(df_candidates_ranked[robust_mask][output_cols].head(10).to_string(index=False))
-    stable_train_mask = train_mask & (df['is_stable'] == True)
-    median_pugh_stable = df.loc[stable_train_mask, 'pugh_ratio'].median()
-    print('\nMedian Pugh\'s ratio of stable training materials: ' + str(round(median_pugh_stable, 4)))
-    plt.figure(figsize=(10, 7))
-    c_values = np.log10(np.clip(df['viability_score'], a_min=1e-5, a_max=None))
-    vmin = c_values.min()
-    vmax = c_values.max()
-    plt.scatter(df[train_mask]['energy_above_hull'], df[train_mask]['mean_pugh_prediction'], c=c_values[train_mask], cmap='viridis', marker='s', alpha=0.8, edgecolor='k', s=50, vmin=vmin, vmax=vmax, label='Training Data')
-    scatter = plt.scatter(df[~train_mask]['energy_above_hull'], df[~train_mask]['mean_pugh_prediction'], c=c_values[~train_mask], cmap='viridis', marker='o', alpha=0.8, edgecolor='k', s=50, vmin=vmin, vmax=vmax, label='Candidates')
+    df_path = os.path.join(data_dir, 'processed_tmd_data.csv')
+    unc_path = os.path.join(data_dir, 'uncertainty_metrics.csv')
+    df = pd.read_csv(df_path)
+    df_unc = pd.read_csv(unc_path)
+    df = df.merge(df_unc, on='material_id')
+    ensemble_path = os.path.join(data_dir, 'ensemble_models.joblib')
+    ensemble_data = joblib.load(ensemble_path)
+    dos_mean = ensemble_data['dos_mean']
+    df['dos_at_fermi'] = df['dos_at_fermi'].fillna(dos_mean)
+    dos_std = df['dos_at_fermi'].std()
+    dos_threshold = dos_mean + 3 * dos_std
+    initial_count = len(df)
+    df = df[df['dos_at_fermi'] <= dos_threshold].copy()
+    filtered_count = len(df)
+    print('Filtered out ' + str(initial_count - filtered_count) + ' materials with dos_at_fermi > 3 std from mean (' + str(round(dos_threshold, 4)) + ').')
+    print('Total materials remaining: ' + str(filtered_count))
+    epsilon = 1e-8
+    df['viability_score'] = df['mean_pred_pugh_ratio'] / (df['std_pred_pugh_ratio'] + epsilon)
+    timestamp = str(int(datetime.now().timestamp()))
+    plt.figure(figsize=(10, 8))
+    mask_theo = (df['theoretical'] == True) | (df['theoretical'] == 1)
+    mask_exp = (df['theoretical'] == False) | (df['theoretical'] == 0)
+    plt.scatter(df.loc[mask_theo, 'energy_above_hull'], df.loc[mask_theo, 'mean_pred_pugh_ratio'], c='blue', label='Theoretical (Unobserved)', alpha=0.7, edgecolors='k', s=60)
+    plt.scatter(df.loc[mask_exp, 'energy_above_hull'], df.loc[mask_exp, 'mean_pred_pugh_ratio'], c='orange', label='Experimental (Observed)', alpha=0.7, edgecolors='k', s=60)
     plt.axvline(x=0.05, color='red', linestyle='--', linewidth=2, label='Stability Threshold (0.05 eV/atom)')
-    plt.axhline(y=median_pugh_stable, color='blue', linestyle=':', linewidth=2, label='Median Stable G/K (' + str(round(median_pugh_stable, 2)) + ')')
-    cbar = plt.colorbar(scatter)
-    cbar.set_label('Log10(Viability Score)', fontsize=12)
+    stable_mask = ((df['is_stable'] == True) | (df['is_stable'] == 1)) & df['pugh_ratio'].notna()
+    stable_pugh_median = df.loc[stable_mask, 'pugh_ratio'].median()
+    if pd.notna(stable_pugh_median):
+        plt.axhline(y=stable_pugh_median, color='green', linestyle=':', linewidth=2, label='Stable Median G/K (' + str(round(stable_pugh_median, 2)) + ')')
     plt.xlabel('Energy Above Hull (eV/atom)', fontsize=12)
-    plt.ylabel("Predicted Pugh's Ratio (G/K)", fontsize=12)
-    plt.title("2D Viability Map: Predicted Pugh's Ratio vs. Energy Above Hull", fontsize=14)
-    plt.legend()
-    plt.grid(True, linestyle=':', alpha=0.6)
+    plt.ylabel('Predicted Pugh\'s Ratio (G/K)', fontsize=12)
+    plt.title('Viability Map: Predicted Pugh\'s Ratio vs. Thermodynamic Stability', fontsize=14)
+    plt.legend(fontsize=11)
+    plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    plot_path = os.path.join(data_dir, 'viability_map_1_' + timestamp + '.png')
+    plot_filename = 'viability_map_1_' + timestamp + '.png'
+    plot_path = os.path.join(data_dir, plot_filename)
     plt.savefig(plot_path, dpi=300)
     plt.close()
-    print('\nViability map saved to ' + plot_path)
-    print('\nSummary of Viability Scores for Filtered Candidates:')
-    print(df_candidates_ranked['viability_score'].describe().to_string())
-    top_20 = df_candidates_ranked.head(20)
-    print('\nTop 20 Candidates - Theoretical vs Synthesized:')
-    print(top_20['theoretical'].value_counts().to_string())
+    print('Viability map saved to ' + plot_path)
+    candidates = df[df['pugh_ratio'].isna()].copy()
+    candidates = candidates.sort_values(by='viability_score', ascending=False)
+    ranked_path = os.path.join(data_dir, 'ranked_candidates.csv')
+    candidates.to_csv(ranked_path, index=False)
+    print('Ranked candidates saved to ' + ranked_path)
+    top_10 = candidates.head(10)
+    print('\n--- Top 10 Ranked Metastable Candidates (Overall) ---')
+    print('Rank  | Formula    | Phase           | E_hull (eV)  | Pred G/K   | Uncertainty  | Score S    | Theoretical')
+    print('-' * 105)
+    for i, (_, row) in enumerate(top_10.iterrows(), 1):
+        phase_cols = [c for c in df.columns if c.startswith('phase_') and row[c] == 1]
+        phase_str = phase_cols[0].replace('phase_', '') if phase_cols else 'Unknown'
+        print(str(i).ljust(5) + ' | ' + str(row['formula']).ljust(10) + ' | ' + phase_str.ljust(15) + ' | ' + str(round(row['energy_above_hull'], 4)).ljust(12) + ' | ' + str(round(row['mean_pred_pugh_ratio'], 4)).ljust(10) + ' | ' + str(round(row['std_pred_pugh_ratio'], 4)).ljust(12) + ' | ' + str(round(row['viability_score'], 4)).ljust(10) + ' | ' + str(row['theoretical']))
+    prioritized = candidates[(candidates['energy_above_hull'] <= 0.05) & ((candidates['theoretical'] == True) | (candidates['theoretical'] == 1))]
+    print('\n--- Top Prioritized Candidates (E_hull <= 0.05 & Theoretical) ---')
+    if len(prioritized) > 0:
+        print('Rank  | Formula    | Phase           | E_hull (eV)  | Pred G/K   | Uncertainty  | Score S')
+        print('-' * 90)
+        for i, (_, row) in enumerate(prioritized.head(10).iterrows(), 1):
+            phase_cols = [c for c in df.columns if c.startswith('phase_') and row[c] == 1]
+            phase_str = phase_cols[0].replace('phase_', '') if phase_cols else 'Unknown'
+            print(str(i).ljust(5) + ' | ' + str(row['formula']).ljust(10) + ' | ' + phase_str.ljust(15) + ' | ' + str(round(row['energy_above_hull'], 4)).ljust(12) + ' | ' + str(round(row['mean_pred_pugh_ratio'], 4)).ljust(10) + ' | ' + str(round(row['std_pred_pugh_ratio'], 4)).ljust(12) + ' | ' + str(round(row['viability_score'], 4)).ljust(10))
+    else:
+        print('No candidates meet the strict prioritization criteria.')
+    print('\n--- Leave-One-Metal-Out Sensitivity Check for Top 10 Candidates ---')
+    print('Formula    | Metal  | Ensemble Pred   | LOGO CV Pred    | Absolute Diff')
+    print('-' * 68)
+    for _, row in top_10.iterrows():
+        diff = abs(row['mean_pred_pugh_ratio'] - row['cv_pred_pugh_ratio'])
+        print(str(row['formula']).ljust(10) + ' | ' + str(row['metal']).ljust(6) + ' | ' + str(round(row['mean_pred_pugh_ratio'], 4)).ljust(15) + ' | ' + str(round(row['cv_pred_pugh_ratio'], 4)).ljust(15) + ' | ' + str(round(diff, 4)).ljust(15))
+    mean_diff = np.mean([abs(row['mean_pred_pugh_ratio'] - row['cv_pred_pugh_ratio']) for _, row in top_10.iterrows()])
+    print('-' * 68)
+    print('Mean Absolute Difference for Top 10: ' + str(round(mean_diff, 4)))
+
+if __name__ == '__main__':
+    main()

@@ -6,60 +6,62 @@ import pandas as pd
 import numpy as np
 import joblib
 import matplotlib.pyplot as plt
-import shap
 from datetime import datetime
+import shap
 
-if __name__ == '__main__':
-    plt.rcParams['text.usetex'] = False
+plt.rcParams['text.usetex'] = False
+
+def main():
     data_dir = 'data'
     data_path = os.path.join(data_dir, 'processed_tmd_data.csv')
     df = pd.read_csv(data_path)
     model_path = os.path.join(data_dir, 'tmd_model.joblib')
     model_dict = joblib.load(model_path)
-    rf_reg = model_dict['model_reg']
-    features = model_dict['features']
-    dos_mean_full = model_dict['dos_mean_full']
-    df_imputed = df.copy()
-    df_imputed['dos_at_fermi'] = df_imputed['dos_at_fermi'].fillna(dos_mean_full)
-    if df_imputed['c_a_ratio'].isna().sum() > 0:
-        df_imputed['c_a_ratio'] = df_imputed['c_a_ratio'].fillna(df_imputed['c_a_ratio'].mean())
-    X = df_imputed[features]
-    print('Calculating SHAP values for the RandomForestRegressor model...')
-    explainer = shap.TreeExplainer(rf_reg)
-    shap_values = explainer.shap_values(X)
-    feature_names_with_units = []
-    for f in features:
-        if f == 'dos_at_fermi':
-            feature_names_with_units.append('dos_at_fermi (states/eV)')
-        elif f == 'd_band_filling':
-            feature_names_with_units.append('d_band_filling (fraction)')
-        elif f == 'en_difference':
-            feature_names_with_units.append('en_difference (Pauling)')
-        elif f == 'c_a_ratio':
-            feature_names_with_units.append('c_a_ratio (dimensionless)')
-        else:
-            feature_names_with_units.append(f)
-    X_plot = X.copy()
-    X_plot.columns = feature_names_with_units
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    if model_dict['type'] == 'rf':
+        model = model_dict['reg']
+        features = model_dict['features']
+    else:
+        return
+    dos_mean = model_dict['dos_mean']
+    df_full = df.copy()
+    df_full['dos_at_fermi'] = df_full['dos_at_fermi'].fillna(dos_mean)
+    if 'M_group_bin' not in df_full.columns:
+        df_full['M_group_bin'] = (df_full['M_group'] >= 8).astype(int)
+    X_full = df_full[features]
+    mask_reg = df_full['pugh_ratio'].notna()
+    X_background = X_full[mask_reg]
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X_background)
+    if isinstance(shap_values, list):
+        shap_values_array = shap_values[0]
+    else:
+        shap_values_array = shap_values
+    timestamp = str(int(datetime.now().timestamp()))
     plt.figure(figsize=(10, 8))
-    shap.summary_plot(shap_values, X_plot, show=False)
+    shap.summary_plot(shap_values_array, X_background, show=False)
+    plt.title('SHAP Summary Plot for Pugh\'s Ratio')
     plt.tight_layout()
-    summary_plot_path = os.path.join(data_dir, 'shap_summary_1_' + timestamp + '.png')
+    summary_plot_path = os.path.join(data_dir, 'shap_summary_' + timestamp + '.png')
     plt.savefig(summary_plot_path, dpi=300)
     plt.close()
-    print('SHAP summary plot saved to ' + summary_plot_path)
-    target_features_plot = ['d_band_filling (fraction)', 'en_difference (Pauling)', 'dos_at_fermi (states/eV)']
-    for i, feat in enumerate(target_features_plot):
-        plt.figure(figsize=(8, 6))
-        shap.dependence_plot(feat, shap_values, X_plot, show=False, interaction_index=None, ax=plt.gca())
-        plt.tight_layout()
-        clean_feat_name = feat.split(' ')[0]
-        dep_plot_path = os.path.join(data_dir, 'shap_dependence_' + clean_feat_name + '_' + str(i+2) + '_' + timestamp + '.png')
-        plt.savefig(dep_plot_path, dpi=300)
-        plt.close()
-        print('SHAP dependence plot for ' + clean_feat_name + ' saved to ' + dep_plot_path)
-    mean_abs_shap = np.abs(shap_values).mean(axis=0)
-    shap_importance = pd.DataFrame({'feature': features, 'mean_abs_shap': mean_abs_shap}).sort_values('mean_abs_shap', ascending=False)
-    print('\nMean Absolute SHAP Values (Feature Importance):')
-    print(shap_importance.to_string(index=False))
+    print('SHAP summary plot saved to: ' + summary_plot_path)
+    fig, ax = plt.subplots(figsize=(8, 6))
+    shap.dependence_plot('d_band_filling', shap_values_array, X_background, interaction_index='dos_at_fermi', show=False, ax=ax)
+    ax.set_title('SHAP Dependence: d_band_filling vs dos_at_fermi')
+    plt.tight_layout()
+    dependence_plot_path = os.path.join(data_dir, 'shap_dependence_' + timestamp + '.png')
+    plt.savefig(dependence_plot_path, dpi=300)
+    plt.close()
+    print('SHAP dependence plot saved to: ' + dependence_plot_path)
+    mean_abs_shap = np.abs(shap_values_array).mean(axis=0)
+    feature_importance = pd.DataFrame({'feature': features, 'mean_abs_shap': mean_abs_shap})
+    feature_importance = feature_importance.sort_values(by='mean_abs_shap', ascending=False).reset_index(drop=True)
+    print('\nTop-5 features by mean absolute SHAP value:')
+    print('-' * 60)
+    for i in range(5):
+        row = feature_importance.iloc[i]
+        print(str(i+1) + '. ' + row['feature'] + ' (Mean |SHAP|: ' + str(round(row['mean_abs_shap'], 4)) + ')')
+    print('-' * 60)
+
+if __name__ == '__main__':
+    main()
