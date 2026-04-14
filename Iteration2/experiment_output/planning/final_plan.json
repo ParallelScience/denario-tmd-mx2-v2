@@ -1,0 +1,84 @@
+{
+    "sub_tasks": [
+        {
+            "bullet_points": [
+                "Load the dataset from the provided path.",
+                "Impute missing dos_at_fermi values using KNN and calculate the standard deviation of neighbors as imputation_uncertainty.",
+                "Create a binary indicator is_dos_missing.",
+                "Apply robust scaling to continuous features and target encoding to categorical features.",
+                "Perform a Kolmogorov-Smirnov test on d_band_filling and M_en to assess dataset shift between the elastic-data-available and missing subsets.",
+                "Print KS test statistics, p-values, count of imputed values, and the range of imputation_uncertainty to the console.",
+                "Save the processed dataframe to a CSV file."
+            ],
+            "sub_task": "Perform KNN-imputation for missing dos_at_fermi values, create imputation_uncertainty and is_dos_missing features, and standardize continuous features.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Define is_robust (binary) based on the 70th percentile of G_vrh computed exclusively on the subset where is_stable=True AND elastic data is available.",
+                "Print the calculated threshold value (in GPa) and the class balance of is_robust (number and fraction of True vs. False) across the 90-sample elastic subset to the console.",
+                "Define is_stable_structure (regression) based on elastic_anisotropy.",
+                "Prepare the dataset for multi-task learning, ensuring the regression target is masked for samples without elastic data.",
+                "Save the prepared training/test splits."
+            ],
+            "sub_task": "Define the is_robust target and prepare the multi-task learning framework.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Cluster transition metals based on periodic table groups.",
+                "Implement LOCO cross-validation.",
+                "Train both a baseline model (static descriptors only) and a full model (adding electronic descriptors) within the same LOCO framework.",
+                "Perform hyperparameter optimization to maximize AUPRC.",
+                "Print per-fold and mean AUPRC scores for both models to the console.",
+                "Save a plot comparing the precision-recall curves of the baseline and full models.",
+                "Save the trained model and cross-validation results."
+            ],
+            "sub_task": "Train the Random Forest ensemble using Leave-One-Cluster-Out (LOCO) cross-validation.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Calculate Spearman rank correlation between M_soc_proxy and G_vrh for the stable population.",
+                "Calculate the Mahalanobis distance of each metastable candidate from the stable training population centroid.",
+                "Save a scatter plot of M_soc_proxy vs. G_vrh with the Spearman correlation annotated.",
+                "Save a histogram of Mahalanobis distances for metastable candidates with a clearly marked OOD threshold.",
+                "Save the correlation statistics and distance metrics."
+            ],
+            "sub_task": "Analyze physical correlations and identify OOD candidates.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Compute SHAP values for the trained model.",
+                "Generate a SHAP summary bar plot (mean absolute SHAP values per feature).",
+                "Print the top-5 most important features by mean absolute SHAP value to the console.",
+                "Generate 2D ALE plots for d_band_filling and en_difference with stable materials overlaid.",
+                "Save the plots and SHAP summary."
+            ],
+            "sub_task": "Generate SHAP values and ALE plots for feature interpretation.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Rank the 112 metastable candidates by is_robust probability and elastic_anisotropy.",
+                "Filter candidates based on imputation_uncertainty and Mahalanobis distance.",
+                "Print the full prioritized candidate list (including material_id, formula, metal, chalcogen, phase, predicted is_robust probability, predicted elastic_anisotropy, imputation_uncertainty, Mahalanobis distance, and OOD flag) to the console.",
+                "Save the final prioritized list as a CSV."
+            ],
+            "sub_task": "Rank and filter metastable candidates.",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Interpret the model performance and AUPRC gains, referencing the precision-recall curve comparison plot.",
+                "Discuss the physical significance of the stability boundary identified by the ALE plots and the SHAP summary bar plot.",
+                "Summarize the findings regarding mechanical robustness in metastable TMDs, incorporating the Spearman correlation and Mahalanobis distance analysis.",
+                "Synthesize the prioritized candidate list and the implications for experimental synthesis, ensuring all numerical results from previous steps are included.",
+                "Explicitly reference all saved plot filenames by description."
+            ],
+            "sub_task": "Write the full Results section of the report.",
+            "sub_task_agent": "researcher"
+        }
+    ]
+}
