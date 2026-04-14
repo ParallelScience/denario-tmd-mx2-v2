@@ -1,0 +1,75 @@
+{
+    "sub_tasks": [
+        {
+            "bullet_points": [
+                "Load the dataset and filter for the 90 materials with elastic data.",
+                "Calibrate the decay constant $\\alpha$ by scanning a range of values to maximize the separation between stable and metastable $V_{score}$ distributions.",
+                "Calculate $V_{score} = \\text{percentile}(G_{vrh}) \\times \\exp(-\\alpha \\cdot \\text{energy\\_above\\_hull})$ using the optimal $\\alpha$.",
+                "Define the binary target `is_viable` as $V_{score} > \\text{median}(V_{score})$ of the stable population.",
+                "Save the processed dataframe and print the chosen $\\alpha$ with justification.",
+                "Generate and save a plot of the $V_{score}$ distribution split by `is_stable`."
+            ],
+            "sub_task": "Data preparation and target definition for mechanical viability",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Perform a Mann-Whitney U test comparing `energy_above_hull` and `volume_per_atom` for samples with and without `dos_at_fermi`.",
+                "Compare model performance (Random Forest, fixed hyperparameters) with and without `is_dos_missing` imputation (5th percentile) using ROC-AUC/balanced accuracy.",
+                "Calculate VIF for continuous features; flag and print features with VIF > 10.",
+                "Perform RFE (target 6–10 features) and save a plot of RFE cross-validation scores vs. number of features.",
+                "Save the selected feature list and the final training dataset."
+            ],
+            "sub_task": "Statistical analysis of missing data and feature selection",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Train a Random Forest classifier using the selected features and `is_viable` target.",
+                "Implement LOGO cross-validation grouped by `M_group`; print sample counts per group.",
+                "Apply SMOTE to training folds; report ROC-AUC and balanced accuracy per fold and averaged.",
+                "Save the trained model and an aggregated confusion matrix plot."
+            ],
+            "sub_task": "Model training and cross-validation",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Conduct SHAP dependence analysis for `d_band_filling` vs. `dos_at_fermi`.",
+                "Quantify the correlation between `M_soc_proxy` and `magnetic_ordering` using a Kruskal-Wallis test; print numerical results.",
+                "Generate and save SHAP summary and dependence plots."
+            ],
+            "sub_task": "Physical driver analysis and SHAP interpretation",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Calculate Mahalanobis distance of metastable candidates to the centroid of the 90-sample elastic training population.",
+                "Generate a Pareto front plot (`energy_above_hull` vs. `predicted_viability_probability`) annotated by `phase` and color-coded by \"chemically exotic\" status (top 10th percentile distance).",
+                "Print the number of flagged candidates and save the plot."
+            ],
+            "sub_task": "OOD detection and Pareto front generation",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Rank metastable candidates by `is_viable` probability.",
+                "Apply final filter: probability > 0.70 and `energy_above_hull` < 0.05 eV/atom.",
+                "Perform \"leave-one-metal-out\" sensitivity check; flag and exclude \"sensitivity-dependent\" candidates (probability drop < 0.70).",
+                "Print the final prioritized list (material_id, formula, phase, magnetic_ordering, energy_above_hull, predicted_viability_probability)."
+            ],
+            "sub_task": "Candidate prioritization and sensitivity analysis",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Interpret physical drivers of mechanical robustness (SHAP analysis) and the \"synthesis window\" (Pareto front).",
+                "Report all numerical cross-validation metrics (per-fold and averaged), feature importance, and OOD filtering thresholds.",
+                "Summarize sensitivity analysis outcomes and the final prioritized candidate list.",
+                "Write the full Results section, including a dedicated subsection on limitations (small elastic dataset, selection bias)."
+            ],
+            "sub_task": "Synthesis of results and final report",
+            "sub_task_agent": "researcher"
+        }
+    ]
+}

@@ -1,0 +1,7 @@
+volume_per_atom
+c_a_ratio
+efermi
+dos_at_fermi_imputed
+total_magnetization
+M_ie1
+en_difference
