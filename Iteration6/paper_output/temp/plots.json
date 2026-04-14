@@ -1,0 +1,17 @@
+{
+  "image0": {
+    "key": "image0",
+    "name": "step_4_shap_summary_1776202145.png",
+    "caption": "SHAP summary plot illustrating feature importance for the Random Forest model predicting Pugh's ratio. Features are ranked by their mean absolute SHAP value, which quantifies their impact on the model output. Each point corresponds to a single material, with its color indicating the feature's value (red for high, blue for low) and its horizontal position showing the impact on the prediction. The density of states at the Fermi level (`dos\\_at\\_fermi`) is the most influential predictor, where high values consistently decrease the predicted Pugh's ratio, indicating that the model learns that electronic instabilities are detrimental to mechanical robustness. Other key features include the structural anisotropy (`c\\_a\\_ratio`), a proxy for spin-orbit coupling (`M\\_soc\\_proxy`), and the d-band filling (`d\\_band\\_filling`), highlighting the learned connection between electronic structure, crystal geometry, and mechanical stability."
+  },
+  "image1": {
+    "key": "image1",
+    "name": "step_4_shap_dependence_1776202145.png",
+    "caption": "SHAP dependence plot illustrating the interaction between the d-band filling and the density of states at the Fermi level (dos\\_at\\_fermi) in predicting mechanical robustness. Each point represents a material, showing the impact of d\\_band\\_filling on the predicted Pugh's ratio. The color indicates the value of dos\\_at\\_fermi, revealing a non-linear coupling: for a given d\\_band\\_filling, an increase in dos\\_at\\_fermi (from blue to red) tends to lower the SHAP value, signifying a decrease in predicted mechanical robustness. This captures the model's learned physical principle that electronically frustrated metallic phases (high dos\\_at\\_fermi) are mechanically softer than robust semiconducting phases (low dos\\_at\\_fermi)."
+  },
+  "image2": {
+    "key": "image2",
+    "name": "step_5_viability_map_1_1776202255.png",
+    "caption": "Viability map for transition-metal dichalcogenides (TMDs) plotting predicted mechanical robustness, quantified by Pugh's ratio ($G/K$), against thermodynamic stability, measured as the energy above the convex hull ($E_{hull}$). Each point corresponds to a TMD, classified as either theoretical (unobserved) or experimentally observed. The vertical dashed line at $E_{hull} = 0.05$ eV/atom represents the threshold for accessible metastable synthesis, while the horizontal dotted line indicates the median robustness of stable materials. The map reveals numerous theoretical candidates that possess both high predicted mechanical robustness and sufficient thermodynamic stability, identifying them as promising targets for experimental synthesis and demonstrating that mechanical viability is not exclusive to ground-state materials."
+  }
+}

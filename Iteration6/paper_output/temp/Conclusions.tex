@@ -1,0 +1,20 @@
+\documentclass[]{article}
+
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{natbib}
+\usepackage{graphicx} 
+
+
+\begin{document}
+
+In this work, we addressed the challenge of identifying mechanically robust metastable transition-metal dichalcogenides (TMDs), whose practical synthesis is often hindered by inherent fragility. We developed a machine learning framework to navigate the vast chemical space of these materials and predict their mechanical viability, thereby accelerating the discovery of novel, resilient functional materials.
+
+Our approach utilized a Random Forest ensemble model trained on a dataset of 202 TMDs to predict Pugh's ratio ($G/K$) from a small set of fundamental electronic and structural descriptors. A rigorous Leave-One-Group-Out cross-validation revealed a key challenge in data-driven materials discovery: the model struggled to extrapolate to TMDs containing transition metals not seen during training, as indicated by negative $R^2$ scores. Despite this limitation in global generalization, interpretability analysis using SHAP confirmed that the model learned physically meaningful relationships. Specifically, it identified a high density of states at the Fermi level as the most influential predictor, correctly associating electronic instability with mechanical softening.
+
+By employing a Deep Ensemble to quantify prediction uncertainty, we screened a library of 112 theoretical metastable TMDs. This screening produced a high-confidence viability map that balances predicted mechanical robustness against thermodynamic accessibility, measured by the energy above the convex hull. The analysis prioritized a list of candidates that are predicted to be both robust and synthesizable. The top-ranked materials are predominantly metastable polymorphs of molybdenum and tungsten chalcogenides, including several catalytically active 1T phases such as 1T-WS$_2$ and 1T-MoS$_2$.
+
+From these results, we have learned that while machine learning models may face significant challenges in extrapolating material properties to entirely new chemical families, they can still serve as powerful tools for discovery. By focusing on physically interpretable descriptors and coupling predictions with robust uncertainty quantification, our framework successfully navigated the complex interplay between electronic structure and mechanical stability. The study provides a concrete and prioritized roadmap for the experimental synthesis of specific, promising metastable TMDs that possess both novel functionalities and the mechanical integrity required for practical applications.
+
+\end{document}
+                

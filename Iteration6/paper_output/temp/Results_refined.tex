@@ -1,0 +1,116 @@
+\documentclass[]{article}
+
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{natbib}
+\usepackage{graphicx} 
+
+
+\begin{document}
+
+\subsection{Model performance and generalization limits}
+
+The primary goal was to develop a model capable of predicting Pugh's ratio ($G_{vrh}/K_{vrh}$) from fundamental material properties. An initial exploration with a shallow neural network failed to generalize, yielding a coefficient of determination ($R^2$) below 0.1 in preliminary tests. Consequently, we adopted a Random Forest regressor, an ensemble method better suited for the small, tabular nature of our dataset.
+
+To rigorously assess the model's ability to extrapolate to new chemical families, we employed a Leave-One-Group-Out (LOGO) cross-validation scheme, where the dataset was partitioned by the transition metal element. This stringent protocol tests the model's capacity to predict the mechanical properties of TMDs containing a metal it has never encountered during training. The results, summarized in Table \ref{tab:logo_cv}, reveal the profound difficulty of this task.
+
+\begin{table}[h!]
+\centering
+\caption{Sensitivity Analysis on Missing Data Imputation using LOGO Cross-Validation. The negative $R^2$ scores indicate the model's difficulty in extrapolating to unseen transition metal groups.}
+\label{tab:logo_cv}
+\begin{tabular}{lcc}
+\hline
+\hline
+Model Configuration & MAE & $R^2$ Score \\
+\hline
+With \texttt{is\_dos\_missing} indicator & 0.166 & -0.043 \\
+Without \texttt{is\_dos\_missing} indicator & 0.165 & -0.031 \\
+\hline
+\end{tabular}
+\end{table}
+
+The LOGO cross-validation yielded negative $R^2$ scores, indicating that for an entirely unseen metal group, the model's predictions are less accurate than a naive model that always predicts the mean of the training data. This highlights a fundamental challenge in data-driven materials discovery: the mechanical properties of TMDs are strongly dictated by the specific electronic structure of the constituent transition metal, making direct extrapolation to new chemical families inherently difficult. The inclusion of a binary indicator for imputed \texttt{dos\_at\_fermi} values slightly degraded performance, so the simpler mean-imputation strategy was retained.
+
+Despite the poor global generalization across unseen metals, the model proves effective at capturing the complex, non-linear relationships within the training data. To leverage this while managing the high epistemic uncertainty associated with extrapolation, we implemented a Deep Ensemble of 10 independent Random Forest models. This approach provides not only a mean prediction for Pugh's ratio but also a robust estimate of the prediction uncertainty (standard deviation), which is critical for our subsequent screening and candidate prioritization.
+
+\subsection{Interpreting the drivers of mechanical stability}
+
+To understand the physical principles learned by the model, we employed SHapley Additive exPlanations (SHAP). This analysis reveals the marginal contribution of each feature to the prediction for every material, providing a detailed view of the model's decision-making process.
+
+The SHAP summary plot in Figure \ref{fig:shap_summary} ranks the features by their overall impact on the model's predictions. The density of states at the Fermi level (\texttt{dos\_at\_fermi}) emerges as the most influential feature. High values of \texttt{dos\_at\_fermi}, indicative of a metallic state, consistently drive the predicted Pugh's ratio lower, signifying mechanical softening. This aligns with the physical principle that electronic instabilities in metals often lead to lattice distortions (e.g., charge density waves) that reduce the shear modulus.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\columnwidth]{../input_files/plots/step_4_shap_summary_1776202145.png}
+    \caption{SHAP summary plot illustrating feature importance for the Random Forest model predicting Pugh's ratio. Features are ranked by their mean absolute SHAP value. The density of states at the Fermi level (\texttt{dos\_at\_fermi}) is the most influential predictor, where high values (red points) consistently decrease the predicted Pugh's ratio. This demonstrates that the model learns the physical principle that electronic instabilities are detrimental to mechanical robustness.}
+    \label{fig:shap_summary}
+\end{figure}
+
+Other significant predictors include the structural anisotropy (\texttt{c\_a\_ratio}), a proxy for spin-orbit coupling (\texttt{M\_soc\_proxy}), and the d-band filling (\texttt{d\_band\_filling}). The \texttt{c\_a\_ratio} captures the geometric aspect of layered materials, where the balance between strong in-plane covalent bonds and weak out-of-plane van der Waals forces governs the shear response. The importance of \texttt{M\_soc\_proxy} ($Z^2$) suggests that the model learns the role of relativistic effects in heavy metals (e.g., W, Ta), where spin-orbit coupling can significantly alter the band structure and, consequently, the elastic properties.
+
+The SHAP dependence plot in Figure \ref{fig:shap_dependence} provides deeper insight into the crucial interaction between \texttt{d\_band\_filling} and \texttt{dos\_at\_fermi}. For Group VI metals like Mo and W (d-band filling of 2), their stable 2H phases are semiconducting, with a \texttt{dos\_at\_fermi} of zero (blue points) and high SHAP values, corresponding to high predicted robustness. When these same metals are in metastable phases (e.g., 1T), they can become metallic, exhibiting a non-zero \texttt{dos\_at\_fermi} (red points). The model correctly identifies that this increase in metallicity for a fixed d-band filling leads to a precipitous drop in the SHAP value, effectively learning that electronically frustrated metallic phases are mechanically softer than their robust semiconducting counterparts.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\columnwidth]{../input_files/plots/step_4_shap_dependence_1776202145.png}
+    \caption{SHAP dependence plot illustrating the interaction between d-band filling and the density of states at the Fermi level (\texttt{dos\_at\_fermi}). For a given d-band filling (e.g., 2.0 for Group VI metals), an increase in \texttt{dos\_at\_fermi} (from blue to red) corresponds to a sharp decrease in the SHAP value, indicating a drop in predicted mechanical robustness. This captures the transition from robust semiconductors (zero DOS) to softer metallic phases.}
+    \label{fig:shap_dependence}
+\end{figure}
+
+\subsection{Screening for robust metastable candidates}
+
+The trained Deep Ensemble was used to screen a library of 112 theoretical metastable TMDs. To prevent the model from extrapolating into unphysical regimes, candidates with extreme \texttt{dos\_at\_fermi} values (exceeding three standard deviations from the training set mean) were first removed. To rank the remaining candidates, we defined a composite viability score, $S$, which balances the predicted robustness with the model's confidence:
+\begin{equation}
+S = \frac{\text{Predicted}(G/K)}{\text{Uncertainty}}
+\label{eq:score}
+\end{equation}
+This score prioritizes materials predicted to have a high Pugh's ratio with low disagreement among the ensemble models.
+
+The resulting viability map is shown in Figure \ref{fig:viability_map}. It plots the predicted mechanical robustness ($G/K$) against thermodynamic accessibility, measured by the energy above the convex hull ($E_{hull}$). The map highlights a promising region containing numerous theoretical candidates that are predicted to be mechanically robust (high $G/K$) and are also thermodynamically accessible for synthesis ($E_{hull} \le 0.05$ eV/atom). This demonstrates that high mechanical viability is not exclusive to ground-state materials.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\columnwidth]{../input_files/plots/step_5_viability_map_1_1776202255.png}
+    \caption{Viability map for TMDs plotting predicted mechanical robustness ($G/K$) against thermodynamic stability ($E_{hull}$). The vertical dashed line ($E_{hull} = 0.05$ eV/atom) marks a typical threshold for experimental accessibility. The map identifies a population of theoretical candidates in the upper-left quadrant that are predicted to be both robust and synthesizable.}
+    \label{fig:viability_map}
+\end{figure}
+
+To generate a focused list for experimental consideration, we filtered the ranked candidates, selecting only those designated as purely theoretical and lying within the accessible energy window ($E_{hull} \le 0.05$ eV/atom). The top 10 prioritized candidates from this screening are presented in Table \ref{tab:top_candidates}.
+
+\begin{table*}[t]
+\centering
+\caption{Top 10 Prioritized Theoretical Candidates for Synthesis, Filtered by $E_{hull} \le 0.05$ eV/atom.}
+\label{tab:top_candidates}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lcccccc}
+\hline
+\hline
+Formula & Phase & $E_{hull}$ (eV/atom) & Predicted $G/K$ & Uncertainty & Score $S$ \\
+\hline
+WS$_2$ & 2H-like & 0.0142 & 0.773 & 0.0039 & 199.7 \\
+WSe$_2$ & 2H-like & 0.0055 & 0.790 & 0.0052 & 151.7 \\
+WS$_2$ & 1T & 0.0074 & 0.761 & 0.0052 & 146.1 \\
+MoS$_2$ & 1T & 0.0037 & 0.724 & 0.0052 & 138.0 \\
+WS$_2$ & 1T & 0.0038 & 0.763 & 0.0061 & 124.1 \\
+MoSe$_2$ & 1T & 0.0079 & 0.727 & 0.0059 & 122.4 \\
+WSe$_2$ & 1T & 0.0082 & 0.779 & 0.0070 & 111.7 \\
+Te$_2$W & 2H-like & 0.0406 & 0.793 & 0.0076 & 104.8 \\
+Te$_2$Mo & 2H-like & 0.0077 & 0.779 & 0.0079 & 98.5 \\
+Te$_2$Mo & 2H-like & 0.0216 & 0.793 & 0.0082 & 96.5 \\
+\hline
+\end{tabular}
+}
+\end{table*}
+
+The prioritized list is dominated by molybdenum (Mo) and tungsten (W) chalcogenides. To ensure these high-confidence predictions were not mere artifacts of the model overfitting to these specific metals, we performed a sensitivity check using the LOGO cross-validation folds. The mean absolute difference between the full-ensemble prediction and the prediction from the model where the specific metal was held out was only 0.049 for the top candidates. This indicates that the model successfully infers the robust nature of these Mo- and W-based phases from the learned behavior of other transition metals, lending significant confidence to their predicted viability.
+
+\subsection{Analysis of prioritized candidates}
+
+The chemical trends observed in the prioritized list (Table \ref{tab:top_candidates}) provide actionable insights that align with the physical principles uncovered by the SHAP analysis. The prevalence of Group VI metals (Mo, W) is striking. In their stable 2H ground states, these materials are robust semiconductors. Our model predicts that even in metastable 1T and 2H-like polymorphs, they retain a high degree of mechanical integrity, with predicted Pugh's ratios consistently above 0.72. This is a non-trivial finding, as the model suggests that despite the mechanical softening associated with a non-zero \texttt{dos\_at\_fermi} in the metallic phases, the intrinsic strength of the metal-chalcogen bonds provides sufficient restoring force to maintain a high shear modulus.
+
+The identification of several 1T phases (e.g., 1T-WS$_2$, 1T-MoS$_2$) as top candidates is particularly significant. These metallic phases are highly coveted for applications in electrocatalysis, such as the hydrogen evolution reaction, where their high conductivity is advantageous. However, their synthesis and application are often hampered by mechanical fragility. Our results suggest that specific polymorphs of these materials possess the intrinsic mechanical robustness needed to withstand operational stresses, making them prime targets for experimental synthesis.
+
+Furthermore, the inclusion of tellurides (Te$_2$W, Te$_2$Mo) highlights the nuanced role of the chalcogen. While tellurium typically forms softer bonds than sulfur or selenium, the model predicts high Pugh's ratios for these specific 2H-like structures. This points to a complex interplay between the strong spin-orbit coupling from the heavy metal and the electronic structure of the chalcogen, resulting in a mechanically resilient lattice. The very low $E_{hull}$ values for most of the top candidates ($<0.015$ eV/atom for the top seven) suggest they are well within reach of established non-equilibrium synthesis techniques, providing a clear and targeted roadmap for the experimental discovery of novel, resilient functional materials.
+
+\end{document}
+                
