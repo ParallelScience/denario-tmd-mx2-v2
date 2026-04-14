@@ -1,38 +1,26 @@
 /opt/denario-venv/lib/python3.12/site-packages/denario/langgraph_agents/paper_module/LaTeX/AAS_keywords.txt
-Extracting UNESCO keywords.......Found 3 plot files to process....
+Keywords found on Keywords.tex...Abstract found on Abstract.tex...
 
+Found 3 plot files to process....
 Plot files: ['step_4_shap_summary_1776202145.png', 'step_4_shap_dependence_1776202145.png', 'step_5_viability_map_1_1776202255.png']
-  Level 1 domains: ['PHYSICS', 'CHEMISTRY', 'TECHNOLOGICAL SCIENCES', 'MATHEMATICS']
-  Level 2 sub-fields for PHYSICS: ['Mechanics', 'Physical chemistry', 'Solid state physics', 'Theoretical physics']
-  Level 3 areas for Mechanics: ['Elasticity', 'Measurement of mechanical properties', 'Solid mechanics', 'Continuous mechanics', 'Statistical mechanics', 'Analytical mechanics']
-  Level 3 areas for Physical chemistry: ['Solid state chemistry', 'Solid state physics', 'Phase equilibria', 'Thermodynamics', 'States of matter', 'Quantum theory']
-  Level 3 areas for Solid state physics: ['Crystal structure', 'Electron states', 'Electron transport properties', 'Lattice mechanics', 'Mechanical properties', 'Semiconductors']
-  Level 3 areas for Theoretical physics: ['Energy (physics)', 'Mass', 'Quantum field theory', 'Other (specify)', 'Other (specify)', 'Other (specify)']
-  Level 2 sub-fields for CHEMISTRY: ['Inorganic chemistry', 'Physical chemistry', 'Analytical chemistry', 'Other chemical specialities (specify)']
-  Level 3 areas for Inorganic chemistry: ['Transition elements', 'Structure of inorganic compounds', 'Metals', 'Sulphur compounds', 'Co-ordination compounds', 'Other (specify)']
-  Level 3 areas for Physical chemistry: ['Solid state chemistry', 'Solid state physics', 'Thermodynamics', 'Phase equilibria', 'States of matter', 'Quantum theory']
-  Level 3 areas for Analytical chemistry: ['Electrochemical analysis', 'Microscopy', 'Thermal analytical methods', 'X-ray spectroscopy', 'Mass spectroscopy', 'Other (specify)']
-  Level 2 sub-fields for TECHNOLOGICAL SCIENCES: ['Chemical technology and engineering', 'Electronic technology', 'Materials technology', 'Mechanical Engineering and technology']
-  Level 3 areas for Chemical technology and engineering: ['Catalysis technology', 'Chemical synthesis', 'Electrochemical operations', 'Industrial chemistry', 'Chemical processes', 'Other (specify)']
-  Level 3 areas for Electronic technology: ['Circuit design', 'Filter design', 'Laser devices', 'Photo-electric devices', 'Semi-conductor devices', 'Transistors']
-  Level 3 areas for Materials technology: ['Màterial properties', 'Material resistance', 'Testing of materials', 'Ceramics', 'Cermets', 'Other (specify)']
-  Level 3 areas for Mechanical Engineering and technology: ['Machine design', 'Mechanized applications', 'Industrial machinery and equipment', 'Specialized industrial machinery', 'Other (specify)', 'Other (specify)']
-  Level 2 sub-fields for MATHEMATICS: ['Computer Sciences', 'Numerical analysis', 'Probability', 'Statistics']
-  Level 3 areas for Computer Sciences: ['Artificial intelligence', 'Computer software', 'Data banks', 'Informatics', 'Programming theory', 'Simulation']
-  Level 3 areas for Numerical analysis: ['Algorithm construction', 'Error analysis', 'Interpolation', 'approximation and curve fitting', 'Iterative methods', 'Linear equations', 'Matrices']
-  Level 3 areas for Probability: ['Application of probability', 'Stochastic processes', 'Subjective probabilities', 'Plausibility', 'Analytic probability theory', 'Foundations of probability']
-  Level 3 areas for Statistics: ['Computing for statistics', 'Data analysis', 'Design and analysis of experiment', 'Multivariate analysis', 'Techniques of statistical association', 'Techniques of statistical prediction']
-  Final UNESCO keywords: Solid state physics, Mechanical properties, Elasticity, Crystal structure, Transition elements, Machine design, Data analysis, Semiconductors
-........UNESCO keywords generated
-✅✅.................Abstract written
-✅✅✅...............Captions generated
+...............Captions generated
 ✅................Figures generated
-✅.............Introduction written
-✅..................Methods written
-❌✅..................Results written
-✅..............Conclusions written
+Introduction found on Introduction.tex
+Methods found on Methods.tex.....
+Results found on Results.tex.....
+Conclusions found on Conclusions.tex
 Compiling paper_v1_preliminary...✅✅
-✅..........Refined results written
+Refined results found on Results_refined.tex
 Compiling paper_v2_no_citations..✅✅
-Paper written in 5 min 48 sec.
-Cost: $0.512
+   - Citations added to Introduction
+   - Citations added to Methods
+Sanitized BibTeX saved to: /home/node/work/projects/materials_project_v2/Iteration6/paper_output/bibliography.bib
+✅ Citations added to all sections.
+Compiling paper_v3_citations.....✅✅✅
+Refining Introduction with citations
+Refining Methods with citations
+✅  - Introduction with citations refined
+✅  - Methods with citations refined
+Compiling paper_v4_final.........✅✅✅
+Paper written in 4 min 0 sec.
+Cost: $0.163
