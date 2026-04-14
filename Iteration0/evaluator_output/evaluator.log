@@ -1,0 +1,1232 @@
+
+###### PROMPT BEGINS ########
+
+###### PROMPT BEGINS ########
+Human: You are provided with the following inputs:
+
+1) A description of a dataset
+2) A current scientific idea or hypothesis
+3) A current research plan
+4) The results obtained from executing that plan
+5) A cumulative report documenting all previous analyses performed on the same dataset
+
+Your task is to critically evaluate the current analysis in the context of all prior work.
+The goal is not to summarize, but to provide actionable, technically informed feedback that will improve the scientific quality, robustness, and insight of future iterations.
+
+Assume that:
+- The dataset is fixed
+- Prior analyses are known and accessible
+- Future agents will use your feedback to design the next research iteration
+
+**Evaluation Guidelines (must follow)**
+**Be a hard critic.**
+    - Identify weaknesses, gaps, overclaims, and missed opportunities.
+    - Treat the analysis as if you were a skeptical but constructive reviewer.
+
+**No Redundant Suggestions.**
+- Do not propose repeating analyses already performed unless:
+    - they failed,
+    - they were methodologically flawed, or
+    - you can clearly articulate how to improve them.
+
+**Context-Aware Critique.**
+- Explicitly take into account:
+    - what has already been tried,
+    - what worked,
+    - what did not,
+    - and what assumptions are now constrained by prior results.
+- For things that failed, state whether they are strictly neccesary or could be done in another way
+
+**Insight-Oriented Feedback.**
+- Focus on suggestions that could:
+    - strengthen causal interpretation,
+    - reduce uncertainty or bias,
+    - reveal new structure in the data,
+    - or test alternative explanations.
+- Avoid superficial “more data / more models” recommendations unless justified.
+
+**Big picture**
+- Your feedback must be used to improve the quality of the work but not to just make it overly complicated
+- We want to perform the minimum analysis needed to yield robust and sound conclusions and to have enough material for a paper
+- Ideally, if a method is simpler and yield the same results, the simpler should be used as will be more interpretable
+- Ultimately, we are interested in learning about science, not super technical details of the way to analyze the data
+
+**Forward-Looking.**
+- Your feedback should not only improve performance, but also help the project learn something new.
+
+Data description:
+# Data Description: MX₂ Transition-Metal Dichalcogenides
+
+## Overview
+
+This dataset contains 202 binary MX₂ compounds (one transition metal M, one chalcogen X, in a 1:2 stoichiometric ratio) retrieved from the Materials Project database (https://materialsproject.org) using the `mp-api` Python client (v0.46.0). All values are the result of density functional theory (DFT) calculations performed by the Materials Project using the Vienna Ab initio Simulation Package (VASP) with the PBE generalized-gradient approximation exchange-correlation functional.
+
+The dataset covers 13 transition metals (M = Ti, Zr, Hf, V, Nb, Ta, Cr, Mo, W, Mn, Fe, Co, Ni) and 3 chalcogens (X = S, Se, Te), spanning 35 space groups and 7 crystal systems.
+
+---
+
+## File Location
+
+```
+/home/node/work/projects/materials_project_v1/tmd_data_enriched.csv
+```
+
+## Loading the Data
+
+```python
+import pandas as pd
+
+df = pd.read_csv("/home/node/work/projects/materials_project_v1/tmd_data_enriched.csv")
+print(df.shape)   # (202, 53)
+```
+
+No index column is stored. All columns are loaded directly.
+
+---
+
+## Column Descriptions
+
+### Identifiers
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `material_id` | str | Unique Materials Project identifier (e.g. `mp-27793`) |
+| `formula` | str | Reduced chemical formula (e.g. `NbSe2`, `MoS2`) |
+| `metal` | str | Transition metal element symbol (one of: Ti, Zr, Hf, V, Nb, Ta, Cr, Mo, W, Mn, Fe, Co, Ni) |
+| `chalcogen` | str | Chalcogen element symbol (one of: S, Se, Te) |
+
+### Crystal Structure
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `spacegroup_symbol` | str | — | Hermann-Mauguin space group symbol (e.g. `P6_3/mmc`, `P-3m1`) |
+| `spacegroup_number` | int | — | International space group number (1–230) |
+| `crystal_system` | str | — | Crystal system: Trigonal, Hexagonal, Orthorhombic, Cubic, Monoclinic, Tetragonal, or Triclinic |
+| `phase` | str | — | TMD polymorph classification derived from space group (see Phase Classification below) |
+| `volume` | float | Å³ | Total unit cell volume |
+| `nsites` | int | — | Number of atomic sites in the unit cell |
+| `volume_per_atom` | float | Å³/atom | Unit cell volume divided by number of sites |
+| `a`, `b`, `c` | float | Å | Lattice parameters (lengths) |
+| `alpha`, `beta`, `gamma` | float | degrees | Lattice parameters (angles) |
+| `c_a_ratio` | float | — | Ratio c/a of lattice parameters |
+
+### Thermodynamic Stability
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `energy_above_hull` | float | eV/atom | Energy above the convex hull. 0 = thermodynamically stable ground state; larger values indicate metastability |
+| `log1p_energy_above_hull` | float | — | log(1 + energy_above_hull); log-transformed stability for use in models |
+| `formation_energy_per_atom` | float | eV/atom | Formation energy per atom relative to elemental references; negative = exothermic formation |
+| `is_stable` | bool | — | True if the material lies on the convex hull (energy_above_hull = 0) |
+| `theoretical` | bool | — | True if the material has not been experimentally observed in the ICSD; False if it has been synthesized |
+
+### Electronic Structure
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `band_gap` | float | eV | DFT-computed electronic band gap. 0.0 = metallic |
+| `efermi` | float | eV | Fermi energy in the DFT calculation (absolute, not relative to VBM) |
+| `dos_at_fermi` | float | states/eV | Total electronic density of states at the Fermi level, computed from the DFT projected DOS. Missing for 16 materials where no DOS calculation is available in MP. |
+
+### Magnetic Properties
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `magnetic_ordering` | str | DFT-relaxed magnetic ground state: NM (non-magnetic), FM (ferromagnetic), AFM (antiferromagnetic), FiM (ferrimagnetic) |
+| `total_magnetization` | float | Total magnetic moment of the unit cell in μ_B |
+
+### Mechanical / Elastic Properties
+
+Available for 90/202 materials (only computed by MP for stable or near-stable structures).
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `K_vrh` | float | GPa | Bulk modulus (Voigt-Reuss-Hill average) |
+| `G_vrh` | float | GPa | Shear modulus (Voigt-Reuss-Hill average) |
+| `poisson_ratio` | float | — | Homogeneous Poisson ratio |
+| `elastic_anisotropy` | float | — | Universal elastic anisotropy index |
+| `debye_temperature` | float | K | Debye temperature, estimated from elastic constants |
+
+### Atomic / Elemental Descriptors
+
+All values are fixed per element and do not depend on the specific crystal structure.
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `M_val` | int | — | Valence electron count of the metal (e.g. Mo → 6, Nb → 5) |
+| `M_Z` | int | — | Atomic number of the metal |
+| `M_en` | float | — | Pauling electronegativity of the metal |
+| `M_ie1` | float | eV | First ionization energy of the metal atom |
+| `M_atomic_radius` | int | pm | Covalent atomic radius of the metal (Cordero et al. 2008) |
+| `M_group` | int | — | Periodic table group of the metal (4–10) |
+| `M_period` | int | — | Periodic table period of the metal (4, 5, or 6) |
+| `M_soc_proxy` | int | — | Spin-orbit coupling strength proxy: Z² of the metal |
+| `X_en` | float | — | Pauling electronegativity of the chalcogen |
+| `X_ie1` | float | eV | First ionization energy of the chalcogen atom |
+| `X_atomic_radius` | int | pm | Covalent atomic radius of the chalcogen (Cordero et al. 2008) |
+| `X_period` | int | — | Periodic table period of the chalcogen (3 = S, 4 = Se, 5 = Te) |
+| `en_difference` | float | — | X_en − M_en; proxy for M–X bond ionicity |
+| `bond_radius_sum` | int | pm | M_atomic_radius + X_atomic_radius; expected M–X bond length |
+| `d_count_m4plus` | int | — | d-electron count of the metal assuming M⁴⁺ oxidation state: M_val − 4 |
+| `d_band_filling` | float | — | d_count_m4plus / 10; fractional filling of the 10-electron d-band |
+
+### Known Experimental Superconductivity (Literature)
+
+These columns are populated only for formulas that appear in the experimental literature with a measured superconducting transition temperature. All other rows are NaN. Tc values are phase-specific in principle; the assignment here is formula-level.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `Tc_exp_K` | float | Experimental superconducting transition temperature in Kelvin |
+| `Tc_phase` | str | Polymorph phase for which Tc was measured (e.g. `2H`, `1T`) |
+| `Tc_ref` | str | Short literature reference key |
+| `is_known_SC` | bool | True if a positive Tc_exp_K is available for this formula |
+
+---
+
+## Phase Classification
+
+The `phase` column classifies each material into a standard TMD polymorph based on its space group number:
+
+| Phase | Space group(s) | Coordination | Description |
+|-------|----------------|--------------|-------------|
+| `2H` | 194 (P6₃/mmc) | Trigonal prismatic | Hexagonal, 2-layer repeat. Common semiconducting or metallic phase for Groups V–VI. |
+| `2H-like` | 176, 186, 187 | Trigonal prismatic-like | Hexagonal space groups structurally similar to 2H. |
+| `1T` | 164 (P-3m1) | Octahedral | Trigonal, 1-layer repeat. Typical for Group IV metals. |
+| `3R` | 160, 166 (R3m, R-3m) | Trigonal prismatic | Rhombohedral, 3-layer repeat. |
+| `1T'` | 11, 12, 63, 65 (C2/m, P2₁/m, Cmce, Cmmm) | Distorted octahedral | Monoclinic distortion of 1T. Associated with Weyl semimetal phases. |
+| `CDW/distorted` | 38, 55, 58, 62 | Distorted | Orthorhombic distortions, often associated with charge-density-wave order. |
+| `cubic` | 216, 221, 225, 229 | Mixed | Rocksalt-like or zincblende cubic structures. |
+| `other` | all remaining | — | 66 materials with space groups outside the above classifications. Crystal system is available for these. |
+
+---
+
+## Dataset Statistics
+
+| Property | Value |
+|----------|-------|
+| Total materials | 202 |
+| Unique formulas | 37 |
+| Metals (M) | Ti, Zr, Hf, V, Nb, Ta, Cr, Mo, W, Mn, Fe, Co, Ni (13 total) |
+| Chalcogens (X) | S, Se, Te (3 total) |
+| Metallic (band_gap = 0) | 152 |
+| Thermodynamically stable (is_stable) | 46 |
+| Experimentally observed (theoretical = False) | 77 |
+| With DOS at Fermi | 186/202 |
+| With elastic constants | 90/202 |
+| With known experimental Tc | 80 rows (10 unique formulas) |
+| Magnetic ordering — NM / FM / FiM / AFM | 120 / 69 / 9 / 4 |
+
+---
+
+## Missing Values
+
+| Column | Missing count | Reason |
+|--------|--------------|--------|
+| `dos_at_fermi` | 16 | No DOS calculation available in MP for these material IDs |
+| `K_vrh`, `G_vrh`, `poisson_ratio`, `elastic_anisotropy`, `debye_temperature` | 112 | Elasticity calculations not performed by MP for metastable structures |
+| `Tc_exp_K`, `Tc_phase`, `Tc_ref` | ~122 | No experimental Tc reported in literature for that formula |
+
+---
+
+## Data Provenance
+
+- *Structural and thermodynamic data*: `MPRester.materials.summary.search` (mp-api v0.46.0), retrieved 2026-04-14
+- *Density of states*: `MPRester.get_dos_by_material_id`, retrieved 2026-04-14
+- *Magnetic ordering and formation energy*: `MPRester.materials.summary.search`, retrieved 2026-04-14
+- *Elastic constants*: `MPRester.elasticity.search`, retrieved 2026-04-14
+- *Atomic properties* (electronegativity, ionization energy, atomic radius): standard literature values (Pauling scale; Cordero et al. 2008 for radii; NIST Atomic Spectra Database for IEs)
+- *Experimental Tc values*: compiled from primary literature (Morris 1972, Revolinsky 1965, Wilson 1975, DiSalvo 1973, Morosan 2006, Costanzo 2016, Shi 2015, Lu 2015, Ye 2012, Qi 2016, Kang 2015)
+
+Current idea: 
+**Title: Electronic Phase-Space Mapping of Mechanical Robustness in Metastable TMDs**
+
+This study develops a binary classification framework to identify mechanically robust metastable TMDs by defining a stability boundary in the feature space of `d_band_filling`, `en_difference`, and `dos_at_fermi`. Rather than regressing continuous elastic constants, the model uses the 90-sample elastic dataset to characterize the electronic signatures of mechanical softening, specifically targeting materials with $G_{vrh}$ exceeding the median threshold of the stable population. By incorporating `magnetic_ordering` and `M_soc_proxy` as critical features, the model accounts for spin-dependent structural distortions—such as Jahn-Teller effects—that suppress mechanical stability in high-density-of-states phases. The classification objective is to screen the 112 metastable candidates for "mechanical viability," using a random forest ensemble to handle the non-linear interaction between crystal symmetry and electronic filling. The final output is a probability map that filters metastable TMDs, isolating those with high predicted shear moduli to prioritize candidates for experimental synthesis.
+
+Current research plan:
+1. **Data Preprocessing and Feature Engineering**: 
+   - Impute missing `dos_at_fermi` values using a KNN regressor trained only on the training folds during cross-validation. Include `band_gap`, `M_val`, `X_period`, and `phase` as features to capture the physical constraint that semiconducting materials have zero DOS at the Fermi level.
+   - Encode categorical variables: apply one-hot encoding to `magnetic_ordering` and `phase`, and ordinal encoding to `crystal_system`.
+   - Incorporate structural descriptors `c_a_ratio`, `volume_per_atom`, and `energy_above_hull` as features to account for lattice packing and thermodynamic stability.
+   - Standardize all continuous features to have zero mean and unit variance.
+
+2. **Target Definition for Mechanical Stiffness**:
+   - Define the target `is_robust` based on the shear modulus ($G_{vrh}$). To account for structural variance, calculate the median $G_{vrh}$ per `crystal_system` or `phase` within the training set to define the threshold for "stiffness."
+   - Assign `1` to materials where $G_{vrh}$ is above the calculated median and `0` otherwise. Ensure this thresholding is performed strictly within cross-validation folds to prevent label leakage.
+
+3. **Exploratory Correlation Analysis**:
+   - Perform Spearman rank correlation analysis between `is_robust` and the primary electronic/structural descriptors.
+   - Visualize the feature space using pair-plots colored by `is_robust` to identify non-linear decision boundaries and clusters of mechanical stiffness.
+
+4. **Handling Class Imbalance**:
+   - Assess the distribution of the `is_robust` target in the 90-sample training set.
+   - Apply class weight balancing within the Random Forest classifier to mitigate bias toward the majority class, avoiding synthetic data generation (SMOTE) to preserve the physical integrity of the small dataset.
+
+5. **Model Selection and Training**:
+   - Implement a Random Forest Classifier to capture non-linear interactions.
+   - Use Repeated Stratified K-Fold Cross-Validation (e.g., 5-fold, 10 repeats) to ensure stable performance estimates and handle the small sample size.
+   - Optimize hyperparameters (`n_estimators`, `max_depth`, `min_samples_split`) using AUPRC as the primary metric.
+
+6. **Feature Importance and Sensitivity Analysis**:
+   - Calculate Permutation Feature Importance to rank the influence of electronic and structural features on mechanical stiffness.
+   - Generate Partial Dependence Plots (PDPs) for the top features to visualize how electronic filling and structural parameters promote or suppress mechanical stiffness.
+
+7. **Inference on Metastable Candidates**:
+   - Apply the trained Random Forest model to the 112 metastable materials.
+   - Generate a probability score for each material representing its likelihood of being mechanically robust.
+
+8. **Validation and Prioritization**:
+   - Perform a sanity check by comparing the distribution of `energy_above_hull` between predicted "robust" and "non-robust" metastable candidates.
+   - Filter candidates using a dual criterion: high model-predicted probability ($>0.8$) and a specific thermodynamic stability threshold (e.g., `energy_above_hull` < 0.05 eV/atom) to identify the most promising candidates for experimental synthesis.
+
+Current results:
+# Electronic Phase-Space Mapping of Mechanical Robustness in Metastable TMDs
+
+## 1. Introduction and Formulation of the Mechanical Viability Boundary
+The primary objective of this study is to establish a predictive, physics-informed machine learning framework for identifying mechanically robust metastable transition-metal dichalcogenides (TMDs). We define a "mechanical viability" boundary within the multidimensional feature space of electronic structure and crystal geometry, formulating a binary classification task based on the Voigt-Reuss-Hill average shear modulus ($G_{vrh}$). Materials exhibiting a $G_{vrh}$ strictly above their respective phase-specific median are classified as mechanically robust (`is_robust` = 1), while those falling below are classified as non-robust (`is_robust` = 0).
+
+## 2. Exploratory Data Analysis and Bivariate Correlations
+Spearman rank correlation analysis reveals key physical drivers of mechanical stiffness:
+- **Volume per atom (`volume_per_atom`):** Strong negative correlation ($
+ho = -0.446$), indicating that denser atomic packing leads to higher stiffness.
+- **Fermi energy (`efermi`):** Strong positive correlation ($
+ho = 0.447$), suggesting higher electron filling enhances lattice rigidity.
+- **Thermodynamic stability (`energy_above_hull`):** Negative correlation ($
+ho = -0.101$), confirming that thermodynamic metastability is often accompanied by mechanical softening.
+
+## 3. Machine Learning Model Performance and Validation
+A Random Forest classifier was employed, utilizing a KNN imputer for missing data. The model was evaluated using Repeated Stratified K-Fold Cross-Validation (5 folds, 10 repeats), prioritizing the Area Under the Precision-Recall Curve (AUPRC) to ensure high confidence in positive predictions.
+
+## 4. Feature Importance and the Physics of Mechanical Softening
+Permutation Feature Importance analysis highlights the following drivers:
+- `volume_per_atom` (0.122 $\pm$ 0.075): Dominant geometric factor.
+- `energy_above_hull` (0.038 $\pm$ 0.048): Key indicator of potential energy well depth.
+- `M_soc_proxy` (0.019 $\pm$ 0.043) and `dos_at_fermi` (0.015 $\pm$ 0.040): These features capture the electronic instability-driven softening, where spin-orbit coupling acts as a stabilizing mechanism by lifting band degeneracies.
+
+## 5. Inference and Screening of Metastable Candidates
+We screened 112 metastable TMD candidates using a dual-filter criterion: $P(\text{robust}) > 0.8$ and $E_{hull} < 0.05$ eV/atom. Five candidates were identified as promising targets:
+- **TaSe$_2$ (2H-like, mp-637232):** $E_{hull} = 0.00069$ eV/atom, $P = 0.950$.
+- **TaS$_2$ (3R, mp-16226):** $E_{hull} = 0.0024$ eV/atom, $P = 0.866$.
+- **TaS$_2$ (3R, mp-755523):** $E_{hull} = 0.0167$ eV/atom, $P = 0.848$.
+- **NiS$_2$ (Other, mp-2282):** $E_{hull} = 0.0152$ eV/atom, $P = 0.910$.
+- **NiS$_2$ (Other, mp-850131):** $E_{hull} = 0.0217$ eV/atom, $P = 0.880$.
+
+## 6. Conclusion
+The developed framework successfully maps the complex phase space of TMDs, providing a robust methodology to identify metastable materials that are both thermodynamically accessible and mechanically stable, thereby guiding future experimental synthesis.
+
+Report with previous results:
+
+
+**Respond in exactly this format:**
+
+\\begin{FEEDBACK}
+<FEEDBACK>
+\\end{FEEDBACK}
+
+In <FEEDBACK>, put your evaluation.
+Human: You are provided with the following inputs:
+
+1) A description of a dataset
+2) A current scientific idea or hypothesis
+3) A current research plan
+4) The results obtained from executing that plan
+
+**Your task is to assess whether any limitations, failures, or ambiguities in the analysis are directly attributable to constraints described in the dataset description.**
+
+Examples of such constraints include (but are not limited to):
+- required preprocessing steps or exclusions,
+- missing variables or incomplete coverage,
+- limited sample size or class imbalance,
+- measurement noise, censoring, or aggregation,
+- assumptions imposed by how the data were collected or curated.
+
+**Scope restriction (important)**:
+- Focus only on the dataset description.
+- Do not critique the scientific idea, hypothesis, or research plan.
+- Do not suggest alternative methods or models.
+- Other agents are responsible for methodological or conceptual feedback.
+
+**If a data-level constraint plausibly explains observed failures or weak results, describe:**
+- which constraint is responsible,
+- how it limits the analysis,
+- and what type of conclusions are affected.
+
+If no such constraints are evident, explicitly state that the dataset description does not appear to explain the observed issues.
+
+Data description:
+# Data Description: MX₂ Transition-Metal Dichalcogenides
+
+## Overview
+
+This dataset contains 202 binary MX₂ compounds (one transition metal M, one chalcogen X, in a 1:2 stoichiometric ratio) retrieved from the Materials Project database (https://materialsproject.org) using the `mp-api` Python client (v0.46.0). All values are the result of density functional theory (DFT) calculations performed by the Materials Project using the Vienna Ab initio Simulation Package (VASP) with the PBE generalized-gradient approximation exchange-correlation functional.
+
+The dataset covers 13 transition metals (M = Ti, Zr, Hf, V, Nb, Ta, Cr, Mo, W, Mn, Fe, Co, Ni) and 3 chalcogens (X = S, Se, Te), spanning 35 space groups and 7 crystal systems.
+
+---
+
+## File Location
+
+```
+/home/node/work/projects/materials_project_v1/tmd_data_enriched.csv
+```
+
+## Loading the Data
+
+```python
+import pandas as pd
+
+df = pd.read_csv("/home/node/work/projects/materials_project_v1/tmd_data_enriched.csv")
+print(df.shape)   # (202, 53)
+```
+
+No index column is stored. All columns are loaded directly.
+
+---
+
+## Column Descriptions
+
+### Identifiers
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `material_id` | str | Unique Materials Project identifier (e.g. `mp-27793`) |
+| `formula` | str | Reduced chemical formula (e.g. `NbSe2`, `MoS2`) |
+| `metal` | str | Transition metal element symbol (one of: Ti, Zr, Hf, V, Nb, Ta, Cr, Mo, W, Mn, Fe, Co, Ni) |
+| `chalcogen` | str | Chalcogen element symbol (one of: S, Se, Te) |
+
+### Crystal Structure
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `spacegroup_symbol` | str | — | Hermann-Mauguin space group symbol (e.g. `P6_3/mmc`, `P-3m1`) |
+| `spacegroup_number` | int | — | International space group number (1–230) |
+| `crystal_system` | str | — | Crystal system: Trigonal, Hexagonal, Orthorhombic, Cubic, Monoclinic, Tetragonal, or Triclinic |
+| `phase` | str | — | TMD polymorph classification derived from space group (see Phase Classification below) |
+| `volume` | float | Å³ | Total unit cell volume |
+| `nsites` | int | — | Number of atomic sites in the unit cell |
+| `volume_per_atom` | float | Å³/atom | Unit cell volume divided by number of sites |
+| `a`, `b`, `c` | float | Å | Lattice parameters (lengths) |
+| `alpha`, `beta`, `gamma` | float | degrees | Lattice parameters (angles) |
+| `c_a_ratio` | float | — | Ratio c/a of lattice parameters |
+
+### Thermodynamic Stability
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `energy_above_hull` | float | eV/atom | Energy above the convex hull. 0 = thermodynamically stable ground state; larger values indicate metastability |
+| `log1p_energy_above_hull` | float | — | log(1 + energy_above_hull); log-transformed stability for use in models |
+| `formation_energy_per_atom` | float | eV/atom | Formation energy per atom relative to elemental references; negative = exothermic formation |
+| `is_stable` | bool | — | True if the material lies on the convex hull (energy_above_hull = 0) |
+| `theoretical` | bool | — | True if the material has not been experimentally observed in the ICSD; False if it has been synthesized |
+
+### Electronic Structure
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `band_gap` | float | eV | DFT-computed electronic band gap. 0.0 = metallic |
+| `efermi` | float | eV | Fermi energy in the DFT calculation (absolute, not relative to VBM) |
+| `dos_at_fermi` | float | states/eV | Total electronic density of states at the Fermi level, computed from the DFT projected DOS. Missing for 16 materials where no DOS calculation is available in MP. |
+
+### Magnetic Properties
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `magnetic_ordering` | str | DFT-relaxed magnetic ground state: NM (non-magnetic), FM (ferromagnetic), AFM (antiferromagnetic), FiM (ferrimagnetic) |
+| `total_magnetization` | float | Total magnetic moment of the unit cell in μ_B |
+
+### Mechanical / Elastic Properties
+
+Available for 90/202 materials (only computed by MP for stable or near-stable structures).
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `K_vrh` | float | GPa | Bulk modulus (Voigt-Reuss-Hill average) |
+| `G_vrh` | float | GPa | Shear modulus (Voigt-Reuss-Hill average) |
+| `poisson_ratio` | float | — | Homogeneous Poisson ratio |
+| `elastic_anisotropy` | float | — | Universal elastic anisotropy index |
+| `debye_temperature` | float | K | Debye temperature, estimated from elastic constants |
+
+### Atomic / Elemental Descriptors
+
+All values are fixed per element and do not depend on the specific crystal structure.
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `M_val` | int | — | Valence electron count of the metal (e.g. Mo → 6, Nb → 5) |
+| `M_Z` | int | — | Atomic number of the metal |
+| `M_en` | float | — | Pauling electronegativity of the metal |
+| `M_ie1` | float | eV | First ionization energy of the metal atom |
+| `M_atomic_radius` | int | pm | Covalent atomic radius of the metal (Cordero et al. 2008) |
+| `M_group` | int | — | Periodic table group of the metal (4–10) |
+| `M_period` | int | — | Periodic table period of the metal (4, 5, or 6) |
+| `M_soc_proxy` | int | — | Spin-orbit coupling strength proxy: Z² of the metal |
+| `X_en` | float | — | Pauling electronegativity of the chalcogen |
+| `X_ie1` | float | eV | First ionization energy of the chalcogen atom |
+| `X_atomic_radius` | int | pm | Covalent atomic radius of the chalcogen (Cordero et al. 2008) |
+| `X_period` | int | — | Periodic table period of the chalcogen (3 = S, 4 = Se, 5 = Te) |
+| `en_difference` | float | — | X_en − M_en; proxy for M–X bond ionicity |
+| `bond_radius_sum` | int | pm | M_atomic_radius + X_atomic_radius; expected M–X bond length |
+| `d_count_m4plus` | int | — | d-electron count of the metal assuming M⁴⁺ oxidation state: M_val − 4 |
+| `d_band_filling` | float | — | d_count_m4plus / 10; fractional filling of the 10-electron d-band |
+
+### Known Experimental Superconductivity (Literature)
+
+These columns are populated only for formulas that appear in the experimental literature with a measured superconducting transition temperature. All other rows are NaN. Tc values are phase-specific in principle; the assignment here is formula-level.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `Tc_exp_K` | float | Experimental superconducting transition temperature in Kelvin |
+| `Tc_phase` | str | Polymorph phase for which Tc was measured (e.g. `2H`, `1T`) |
+| `Tc_ref` | str | Short literature reference key |
+| `is_known_SC` | bool | True if a positive Tc_exp_K is available for this formula |
+
+---
+
+## Phase Classification
+
+The `phase` column classifies each material into a standard TMD polymorph based on its space group number:
+
+| Phase | Space group(s) | Coordination | Description |
+|-------|----------------|--------------|-------------|
+| `2H` | 194 (P6₃/mmc) | Trigonal prismatic | Hexagonal, 2-layer repeat. Common semiconducting or metallic phase for Groups V–VI. |
+| `2H-like` | 176, 186, 187 | Trigonal prismatic-like | Hexagonal space groups structurally similar to 2H. |
+| `1T` | 164 (P-3m1) | Octahedral | Trigonal, 1-layer repeat. Typical for Group IV metals. |
+| `3R` | 160, 166 (R3m, R-3m) | Trigonal prismatic | Rhombohedral, 3-layer repeat. |
+| `1T'` | 11, 12, 63, 65 (C2/m, P2₁/m, Cmce, Cmmm) | Distorted octahedral | Monoclinic distortion of 1T. Associated with Weyl semimetal phases. |
+| `CDW/distorted` | 38, 55, 58, 62 | Distorted | Orthorhombic distortions, often associated with charge-density-wave order. |
+| `cubic` | 216, 221, 225, 229 | Mixed | Rocksalt-like or zincblende cubic structures. |
+| `other` | all remaining | — | 66 materials with space groups outside the above classifications. Crystal system is available for these. |
+
+---
+
+## Dataset Statistics
+
+| Property | Value |
+|----------|-------|
+| Total materials | 202 |
+| Unique formulas | 37 |
+| Metals (M) | Ti, Zr, Hf, V, Nb, Ta, Cr, Mo, W, Mn, Fe, Co, Ni (13 total) |
+| Chalcogens (X) | S, Se, Te (3 total) |
+| Metallic (band_gap = 0) | 152 |
+| Thermodynamically stable (is_stable) | 46 |
+| Experimentally observed (theoretical = False) | 77 |
+| With DOS at Fermi | 186/202 |
+| With elastic constants | 90/202 |
+| With known experimental Tc | 80 rows (10 unique formulas) |
+| Magnetic ordering — NM / FM / FiM / AFM | 120 / 69 / 9 / 4 |
+
+---
+
+## Missing Values
+
+| Column | Missing count | Reason |
+|--------|--------------|--------|
+| `dos_at_fermi` | 16 | No DOS calculation available in MP for these material IDs |
+| `K_vrh`, `G_vrh`, `poisson_ratio`, `elastic_anisotropy`, `debye_temperature` | 112 | Elasticity calculations not performed by MP for metastable structures |
+| `Tc_exp_K`, `Tc_phase`, `Tc_ref` | ~122 | No experimental Tc reported in literature for that formula |
+
+---
+
+## Data Provenance
+
+- *Structural and thermodynamic data*: `MPRester.materials.summary.search` (mp-api v0.46.0), retrieved 2026-04-14
+- *Density of states*: `MPRester.get_dos_by_material_id`, retrieved 2026-04-14
+- *Magnetic ordering and formation energy*: `MPRester.materials.summary.search`, retrieved 2026-04-14
+- *Elastic constants*: `MPRester.elasticity.search`, retrieved 2026-04-14
+- *Atomic properties* (electronegativity, ionization energy, atomic radius): standard literature values (Pauling scale; Cordero et al. 2008 for radii; NIST Atomic Spectra Database for IEs)
+- *Experimental Tc values*: compiled from primary literature (Morris 1972, Revolinsky 1965, Wilson 1975, DiSalvo 1973, Morosan 2006, Costanzo 2016, Shi 2015, Lu 2015, Ye 2012, Qi 2016, Kang 2015)
+
+Idea: 
+**Title: Electronic Phase-Space Mapping of Mechanical Robustness in Metastable TMDs**
+
+This study develops a binary classification framework to identify mechanically robust metastable TMDs by defining a stability boundary in the feature space of `d_band_filling`, `en_difference`, and `dos_at_fermi`. Rather than regressing continuous elastic constants, the model uses the 90-sample elastic dataset to characterize the electronic signatures of mechanical softening, specifically targeting materials with $G_{vrh}$ exceeding the median threshold of the stable population. By incorporating `magnetic_ordering` and `M_soc_proxy` as critical features, the model accounts for spin-dependent structural distortions—such as Jahn-Teller effects—that suppress mechanical stability in high-density-of-states phases. The classification objective is to screen the 112 metastable candidates for "mechanical viability," using a random forest ensemble to handle the non-linear interaction between crystal symmetry and electronic filling. The final output is a probability map that filters metastable TMDs, isolating those with high predicted shear moduli to prioritize candidates for experimental synthesis.
+
+Research plan:
+1. **Data Preprocessing and Feature Engineering**: 
+   - Impute missing `dos_at_fermi` values using a KNN regressor trained only on the training folds during cross-validation. Include `band_gap`, `M_val`, `X_period`, and `phase` as features to capture the physical constraint that semiconducting materials have zero DOS at the Fermi level.
+   - Encode categorical variables: apply one-hot encoding to `magnetic_ordering` and `phase`, and ordinal encoding to `crystal_system`.
+   - Incorporate structural descriptors `c_a_ratio`, `volume_per_atom`, and `energy_above_hull` as features to account for lattice packing and thermodynamic stability.
+   - Standardize all continuous features to have zero mean and unit variance.
+
+2. **Target Definition for Mechanical Stiffness**:
+   - Define the target `is_robust` based on the shear modulus ($G_{vrh}$). To account for structural variance, calculate the median $G_{vrh}$ per `crystal_system` or `phase` within the training set to define the threshold for "stiffness."
+   - Assign `1` to materials where $G_{vrh}$ is above the calculated median and `0` otherwise. Ensure this thresholding is performed strictly within cross-validation folds to prevent label leakage.
+
+3. **Exploratory Correlation Analysis**:
+   - Perform Spearman rank correlation analysis between `is_robust` and the primary electronic/structural descriptors.
+   - Visualize the feature space using pair-plots colored by `is_robust` to identify non-linear decision boundaries and clusters of mechanical stiffness.
+
+4. **Handling Class Imbalance**:
+   - Assess the distribution of the `is_robust` target in the 90-sample training set.
+   - Apply class weight balancing within the Random Forest classifier to mitigate bias toward the majority class, avoiding synthetic data generation (SMOTE) to preserve the physical integrity of the small dataset.
+
+5. **Model Selection and Training**:
+   - Implement a Random Forest Classifier to capture non-linear interactions.
+   - Use Repeated Stratified K-Fold Cross-Validation (e.g., 5-fold, 10 repeats) to ensure stable performance estimates and handle the small sample size.
+   - Optimize hyperparameters (`n_estimators`, `max_depth`, `min_samples_split`) using AUPRC as the primary metric.
+
+6. **Feature Importance and Sensitivity Analysis**:
+   - Calculate Permutation Feature Importance to rank the influence of electronic and structural features on mechanical stiffness.
+   - Generate Partial Dependence Plots (PDPs) for the top features to visualize how electronic filling and structural parameters promote or suppress mechanical stiffness.
+
+7. **Inference on Metastable Candidates**:
+   - Apply the trained Random Forest model to the 112 metastable materials.
+   - Generate a probability score for each material representing its likelihood of being mechanically robust.
+
+8. **Validation and Prioritization**:
+   - Perform a sanity check by comparing the distribution of `energy_above_hull` between predicted "robust" and "non-robust" metastable candidates.
+   - Filter candidates using a dual criterion: high model-predicted probability ($>0.8$) and a specific thermodynamic stability threshold (e.g., `energy_above_hull` < 0.05 eV/atom) to identify the most promising candidates for experimental synthesis.
+
+Analysis results:
+# Electronic Phase-Space Mapping of Mechanical Robustness in Metastable TMDs
+
+## 1. Introduction and Formulation of the Mechanical Viability Boundary
+The primary objective of this study is to establish a predictive, physics-informed machine learning framework for identifying mechanically robust metastable transition-metal dichalcogenides (TMDs). We define a "mechanical viability" boundary within the multidimensional feature space of electronic structure and crystal geometry, formulating a binary classification task based on the Voigt-Reuss-Hill average shear modulus ($G_{vrh}$). Materials exhibiting a $G_{vrh}$ strictly above their respective phase-specific median are classified as mechanically robust (`is_robust` = 1), while those falling below are classified as non-robust (`is_robust` = 0).
+
+## 2. Exploratory Data Analysis and Bivariate Correlations
+Spearman rank correlation analysis reveals key physical drivers of mechanical stiffness:
+- **Volume per atom (`volume_per_atom`):** Strong negative correlation ($
+ho = -0.446$), indicating that denser atomic packing leads to higher stiffness.
+- **Fermi energy (`efermi`):** Strong positive correlation ($
+ho = 0.447$), suggesting higher electron filling enhances lattice rigidity.
+- **Thermodynamic stability (`energy_above_hull`):** Negative correlation ($
+ho = -0.101$), confirming that thermodynamic metastability is often accompanied by mechanical softening.
+
+## 3. Machine Learning Model Performance and Validation
+A Random Forest classifier was employed, utilizing a KNN imputer for missing data. The model was evaluated using Repeated Stratified K-Fold Cross-Validation (5 folds, 10 repeats), prioritizing the Area Under the Precision-Recall Curve (AUPRC) to ensure high confidence in positive predictions.
+
+## 4. Feature Importance and the Physics of Mechanical Softening
+Permutation Feature Importance analysis highlights the following drivers:
+- `volume_per_atom` (0.122 $\pm$ 0.075): Dominant geometric factor.
+- `energy_above_hull` (0.038 $\pm$ 0.048): Key indicator of potential energy well depth.
+- `M_soc_proxy` (0.019 $\pm$ 0.043) and `dos_at_fermi` (0.015 $\pm$ 0.040): These features capture the electronic instability-driven softening, where spin-orbit coupling acts as a stabilizing mechanism by lifting band degeneracies.
+
+## 5. Inference and Screening of Metastable Candidates
+We screened 112 metastable TMD candidates using a dual-filter criterion: $P(\text{robust}) > 0.8$ and $E_{hull} < 0.05$ eV/atom. Five candidates were identified as promising targets:
+- **TaSe$_2$ (2H-like, mp-637232):** $E_{hull} = 0.00069$ eV/atom, $P = 0.950$.
+- **TaS$_2$ (3R, mp-16226):** $E_{hull} = 0.0024$ eV/atom, $P = 0.866$.
+- **TaS$_2$ (3R, mp-755523):** $E_{hull} = 0.0167$ eV/atom, $P = 0.848$.
+- **NiS$_2$ (Other, mp-2282):** $E_{hull} = 0.0152$ eV/atom, $P = 0.910$.
+- **NiS$_2$ (Other, mp-850131):** $E_{hull} = 0.0217$ eV/atom, $P = 0.880$.
+
+## 6. Conclusion
+The developed framework successfully maps the complex phase space of TMDs, providing a robust methodology to identify metastable materials that are both thermodynamically accessible and mechanically stable, thereby guiding future experimental synthesis.
+
+**Respond in exactly this format:**
+
+\\begin{COMMENTS}
+<COMMENTS>
+\\end{COMMENTS}
+
+In <COMMENTS>, put your comments. Your comments should be short, unless you identify issues with the input data description.
+
+###### PROMPT ENDS ########
+
+
+###### PROMPT ENDS ########
+
+
+###### PROMPT BEGINS ########
+Human: You are given four inputs:
+1) a dataset description,
+2) an idea or hypothesis,
+3) a research plan, and
+4) the results of the analysis.
+
+Your task is to produce a concise but information-dense summary that captures all scientifically relevant details needed to continue or extend this project. 
+
+This summary will be included in a living research report that will be updated as new experiments are performed. 
+Future agents will receive this report along with:
+
+- the same dataset description,
+- the same or a revised idea,
+- a new research plan,
+- and new experimental results.
+
+Therefore, your summary should:
+- Preserve all key assumptions, definitions, data characteristics, and methodological choices
+- Clearly state the main findings, limitations, and uncertainties
+- Highlight decisions that constrain or inform future experiments
+- Avoid unnecessary narrative, background, or stylistic elaboration
+
+**Aim for maximal information retention per word.**
+Write clearly and precisely, prioritizing content that a future agent would need in order to:
+
+- understand what was done,
+- know what worked or failed,
+- and decide what to do next.
+
+Data description:
+# Data Description: MX₂ Transition-Metal Dichalcogenides
+
+## Overview
+
+This dataset contains 202 binary MX₂ compounds (one transition metal M, one chalcogen X, in a 1:2 stoichiometric ratio) retrieved from the Materials Project database (https://materialsproject.org) using the `mp-api` Python client (v0.46.0). All values are the result of density functional theory (DFT) calculations performed by the Materials Project using the Vienna Ab initio Simulation Package (VASP) with the PBE generalized-gradient approximation exchange-correlation functional.
+
+The dataset covers 13 transition metals (M = Ti, Zr, Hf, V, Nb, Ta, Cr, Mo, W, Mn, Fe, Co, Ni) and 3 chalcogens (X = S, Se, Te), spanning 35 space groups and 7 crystal systems.
+
+---
+
+## File Location
+
+```
+/home/node/work/projects/materials_project_v1/tmd_data_enriched.csv
+```
+
+## Loading the Data
+
+```python
+import pandas as pd
+
+df = pd.read_csv("/home/node/work/projects/materials_project_v1/tmd_data_enriched.csv")
+print(df.shape)   # (202, 53)
+```
+
+No index column is stored. All columns are loaded directly.
+
+---
+
+## Column Descriptions
+
+### Identifiers
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `material_id` | str | Unique Materials Project identifier (e.g. `mp-27793`) |
+| `formula` | str | Reduced chemical formula (e.g. `NbSe2`, `MoS2`) |
+| `metal` | str | Transition metal element symbol (one of: Ti, Zr, Hf, V, Nb, Ta, Cr, Mo, W, Mn, Fe, Co, Ni) |
+| `chalcogen` | str | Chalcogen element symbol (one of: S, Se, Te) |
+
+### Crystal Structure
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `spacegroup_symbol` | str | — | Hermann-Mauguin space group symbol (e.g. `P6_3/mmc`, `P-3m1`) |
+| `spacegroup_number` | int | — | International space group number (1–230) |
+| `crystal_system` | str | — | Crystal system: Trigonal, Hexagonal, Orthorhombic, Cubic, Monoclinic, Tetragonal, or Triclinic |
+| `phase` | str | — | TMD polymorph classification derived from space group (see Phase Classification below) |
+| `volume` | float | Å³ | Total unit cell volume |
+| `nsites` | int | — | Number of atomic sites in the unit cell |
+| `volume_per_atom` | float | Å³/atom | Unit cell volume divided by number of sites |
+| `a`, `b`, `c` | float | Å | Lattice parameters (lengths) |
+| `alpha`, `beta`, `gamma` | float | degrees | Lattice parameters (angles) |
+| `c_a_ratio` | float | — | Ratio c/a of lattice parameters |
+
+### Thermodynamic Stability
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `energy_above_hull` | float | eV/atom | Energy above the convex hull. 0 = thermodynamically stable ground state; larger values indicate metastability |
+| `log1p_energy_above_hull` | float | — | log(1 + energy_above_hull); log-transformed stability for use in models |
+| `formation_energy_per_atom` | float | eV/atom | Formation energy per atom relative to elemental references; negative = exothermic formation |
+| `is_stable` | bool | — | True if the material lies on the convex hull (energy_above_hull = 0) |
+| `theoretical` | bool | — | True if the material has not been experimentally observed in the ICSD; False if it has been synthesized |
+
+### Electronic Structure
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `band_gap` | float | eV | DFT-computed electronic band gap. 0.0 = metallic |
+| `efermi` | float | eV | Fermi energy in the DFT calculation (absolute, not relative to VBM) |
+| `dos_at_fermi` | float | states/eV | Total electronic density of states at the Fermi level, computed from the DFT projected DOS. Missing for 16 materials where no DOS calculation is available in MP. |
+
+### Magnetic Properties
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `magnetic_ordering` | str | DFT-relaxed magnetic ground state: NM (non-magnetic), FM (ferromagnetic), AFM (antiferromagnetic), FiM (ferrimagnetic) |
+| `total_magnetization` | float | Total magnetic moment of the unit cell in μ_B |
+
+### Mechanical / Elastic Properties
+
+Available for 90/202 materials (only computed by MP for stable or near-stable structures).
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `K_vrh` | float | GPa | Bulk modulus (Voigt-Reuss-Hill average) |
+| `G_vrh` | float | GPa | Shear modulus (Voigt-Reuss-Hill average) |
+| `poisson_ratio` | float | — | Homogeneous Poisson ratio |
+| `elastic_anisotropy` | float | — | Universal elastic anisotropy index |
+| `debye_temperature` | float | K | Debye temperature, estimated from elastic constants |
+
+### Atomic / Elemental Descriptors
+
+All values are fixed per element and do not depend on the specific crystal structure.
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `M_val` | int | — | Valence electron count of the metal (e.g. Mo → 6, Nb → 5) |
+| `M_Z` | int | — | Atomic number of the metal |
+| `M_en` | float | — | Pauling electronegativity of the metal |
+| `M_ie1` | float | eV | First ionization energy of the metal atom |
+| `M_atomic_radius` | int | pm | Covalent atomic radius of the metal (Cordero et al. 2008) |
+| `M_group` | int | — | Periodic table group of the metal (4–10) |
+| `M_period` | int | — | Periodic table period of the metal (4, 5, or 6) |
+| `M_soc_proxy` | int | — | Spin-orbit coupling strength proxy: Z² of the metal |
+| `X_en` | float | — | Pauling electronegativity of the chalcogen |
+| `X_ie1` | float | eV | First ionization energy of the chalcogen atom |
+| `X_atomic_radius` | int | pm | Covalent atomic radius of the chalcogen (Cordero et al. 2008) |
+| `X_period` | int | — | Periodic table period of the chalcogen (3 = S, 4 = Se, 5 = Te) |
+| `en_difference` | float | — | X_en − M_en; proxy for M–X bond ionicity |
+| `bond_radius_sum` | int | pm | M_atomic_radius + X_atomic_radius; expected M–X bond length |
+| `d_count_m4plus` | int | — | d-electron count of the metal assuming M⁴⁺ oxidation state: M_val − 4 |
+| `d_band_filling` | float | — | d_count_m4plus / 10; fractional filling of the 10-electron d-band |
+
+### Known Experimental Superconductivity (Literature)
+
+These columns are populated only for formulas that appear in the experimental literature with a measured superconducting transition temperature. All other rows are NaN. Tc values are phase-specific in principle; the assignment here is formula-level.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `Tc_exp_K` | float | Experimental superconducting transition temperature in Kelvin |
+| `Tc_phase` | str | Polymorph phase for which Tc was measured (e.g. `2H`, `1T`) |
+| `Tc_ref` | str | Short literature reference key |
+| `is_known_SC` | bool | True if a positive Tc_exp_K is available for this formula |
+
+---
+
+## Phase Classification
+
+The `phase` column classifies each material into a standard TMD polymorph based on its space group number:
+
+| Phase | Space group(s) | Coordination | Description |
+|-------|----------------|--------------|-------------|
+| `2H` | 194 (P6₃/mmc) | Trigonal prismatic | Hexagonal, 2-layer repeat. Common semiconducting or metallic phase for Groups V–VI. |
+| `2H-like` | 176, 186, 187 | Trigonal prismatic-like | Hexagonal space groups structurally similar to 2H. |
+| `1T` | 164 (P-3m1) | Octahedral | Trigonal, 1-layer repeat. Typical for Group IV metals. |
+| `3R` | 160, 166 (R3m, R-3m) | Trigonal prismatic | Rhombohedral, 3-layer repeat. |
+| `1T'` | 11, 12, 63, 65 (C2/m, P2₁/m, Cmce, Cmmm) | Distorted octahedral | Monoclinic distortion of 1T. Associated with Weyl semimetal phases. |
+| `CDW/distorted` | 38, 55, 58, 62 | Distorted | Orthorhombic distortions, often associated with charge-density-wave order. |
+| `cubic` | 216, 221, 225, 229 | Mixed | Rocksalt-like or zincblende cubic structures. |
+| `other` | all remaining | — | 66 materials with space groups outside the above classifications. Crystal system is available for these. |
+
+---
+
+## Dataset Statistics
+
+| Property | Value |
+|----------|-------|
+| Total materials | 202 |
+| Unique formulas | 37 |
+| Metals (M) | Ti, Zr, Hf, V, Nb, Ta, Cr, Mo, W, Mn, Fe, Co, Ni (13 total) |
+| Chalcogens (X) | S, Se, Te (3 total) |
+| Metallic (band_gap = 0) | 152 |
+| Thermodynamically stable (is_stable) | 46 |
+| Experimentally observed (theoretical = False) | 77 |
+| With DOS at Fermi | 186/202 |
+| With elastic constants | 90/202 |
+| With known experimental Tc | 80 rows (10 unique formulas) |
+| Magnetic ordering — NM / FM / FiM / AFM | 120 / 69 / 9 / 4 |
+
+---
+
+## Missing Values
+
+| Column | Missing count | Reason |
+|--------|--------------|--------|
+| `dos_at_fermi` | 16 | No DOS calculation available in MP for these material IDs |
+| `K_vrh`, `G_vrh`, `poisson_ratio`, `elastic_anisotropy`, `debye_temperature` | 112 | Elasticity calculations not performed by MP for metastable structures |
+| `Tc_exp_K`, `Tc_phase`, `Tc_ref` | ~122 | No experimental Tc reported in literature for that formula |
+
+---
+
+## Data Provenance
+
+- *Structural and thermodynamic data*: `MPRester.materials.summary.search` (mp-api v0.46.0), retrieved 2026-04-14
+- *Density of states*: `MPRester.get_dos_by_material_id`, retrieved 2026-04-14
+- *Magnetic ordering and formation energy*: `MPRester.materials.summary.search`, retrieved 2026-04-14
+- *Elastic constants*: `MPRester.elasticity.search`, retrieved 2026-04-14
+- *Atomic properties* (electronegativity, ionization energy, atomic radius): standard literature values (Pauling scale; Cordero et al. 2008 for radii; NIST Atomic Spectra Database for IEs)
+- *Experimental Tc values*: compiled from primary literature (Morris 1972, Revolinsky 1965, Wilson 1975, DiSalvo 1973, Morosan 2006, Costanzo 2016, Shi 2015, Lu 2015, Ye 2012, Qi 2016, Kang 2015)
+
+Idea: 
+**Title: Electronic Phase-Space Mapping of Mechanical Robustness in Metastable TMDs**
+
+This study develops a binary classification framework to identify mechanically robust metastable TMDs by defining a stability boundary in the feature space of `d_band_filling`, `en_difference`, and `dos_at_fermi`. Rather than regressing continuous elastic constants, the model uses the 90-sample elastic dataset to characterize the electronic signatures of mechanical softening, specifically targeting materials with $G_{vrh}$ exceeding the median threshold of the stable population. By incorporating `magnetic_ordering` and `M_soc_proxy` as critical features, the model accounts for spin-dependent structural distortions—such as Jahn-Teller effects—that suppress mechanical stability in high-density-of-states phases. The classification objective is to screen the 112 metastable candidates for "mechanical viability," using a random forest ensemble to handle the non-linear interaction between crystal symmetry and electronic filling. The final output is a probability map that filters metastable TMDs, isolating those with high predicted shear moduli to prioritize candidates for experimental synthesis.
+
+Research plan:
+1. **Data Preprocessing and Feature Engineering**: 
+   - Impute missing `dos_at_fermi` values using a KNN regressor trained only on the training folds during cross-validation. Include `band_gap`, `M_val`, `X_period`, and `phase` as features to capture the physical constraint that semiconducting materials have zero DOS at the Fermi level.
+   - Encode categorical variables: apply one-hot encoding to `magnetic_ordering` and `phase`, and ordinal encoding to `crystal_system`.
+   - Incorporate structural descriptors `c_a_ratio`, `volume_per_atom`, and `energy_above_hull` as features to account for lattice packing and thermodynamic stability.
+   - Standardize all continuous features to have zero mean and unit variance.
+
+2. **Target Definition for Mechanical Stiffness**:
+   - Define the target `is_robust` based on the shear modulus ($G_{vrh}$). To account for structural variance, calculate the median $G_{vrh}$ per `crystal_system` or `phase` within the training set to define the threshold for "stiffness."
+   - Assign `1` to materials where $G_{vrh}$ is above the calculated median and `0` otherwise. Ensure this thresholding is performed strictly within cross-validation folds to prevent label leakage.
+
+3. **Exploratory Correlation Analysis**:
+   - Perform Spearman rank correlation analysis between `is_robust` and the primary electronic/structural descriptors.
+   - Visualize the feature space using pair-plots colored by `is_robust` to identify non-linear decision boundaries and clusters of mechanical stiffness.
+
+4. **Handling Class Imbalance**:
+   - Assess the distribution of the `is_robust` target in the 90-sample training set.
+   - Apply class weight balancing within the Random Forest classifier to mitigate bias toward the majority class, avoiding synthetic data generation (SMOTE) to preserve the physical integrity of the small dataset.
+
+5. **Model Selection and Training**:
+   - Implement a Random Forest Classifier to capture non-linear interactions.
+   - Use Repeated Stratified K-Fold Cross-Validation (e.g., 5-fold, 10 repeats) to ensure stable performance estimates and handle the small sample size.
+   - Optimize hyperparameters (`n_estimators`, `max_depth`, `min_samples_split`) using AUPRC as the primary metric.
+
+6. **Feature Importance and Sensitivity Analysis**:
+   - Calculate Permutation Feature Importance to rank the influence of electronic and structural features on mechanical stiffness.
+   - Generate Partial Dependence Plots (PDPs) for the top features to visualize how electronic filling and structural parameters promote or suppress mechanical stiffness.
+
+7. **Inference on Metastable Candidates**:
+   - Apply the trained Random Forest model to the 112 metastable materials.
+   - Generate a probability score for each material representing its likelihood of being mechanically robust.
+
+8. **Validation and Prioritization**:
+   - Perform a sanity check by comparing the distribution of `energy_above_hull` between predicted "robust" and "non-robust" metastable candidates.
+   - Filter candidates using a dual criterion: high model-predicted probability ($>0.8$) and a specific thermodynamic stability threshold (e.g., `energy_above_hull` < 0.05 eV/atom) to identify the most promising candidates for experimental synthesis.
+
+Analysis results:
+# Electronic Phase-Space Mapping of Mechanical Robustness in Metastable TMDs
+
+## 1. Introduction and Formulation of the Mechanical Viability Boundary
+The primary objective of this study is to establish a predictive, physics-informed machine learning framework for identifying mechanically robust metastable transition-metal dichalcogenides (TMDs). We define a "mechanical viability" boundary within the multidimensional feature space of electronic structure and crystal geometry, formulating a binary classification task based on the Voigt-Reuss-Hill average shear modulus ($G_{vrh}$). Materials exhibiting a $G_{vrh}$ strictly above their respective phase-specific median are classified as mechanically robust (`is_robust` = 1), while those falling below are classified as non-robust (`is_robust` = 0).
+
+## 2. Exploratory Data Analysis and Bivariate Correlations
+Spearman rank correlation analysis reveals key physical drivers of mechanical stiffness:
+- **Volume per atom (`volume_per_atom`):** Strong negative correlation ($
+ho = -0.446$), indicating that denser atomic packing leads to higher stiffness.
+- **Fermi energy (`efermi`):** Strong positive correlation ($
+ho = 0.447$), suggesting higher electron filling enhances lattice rigidity.
+- **Thermodynamic stability (`energy_above_hull`):** Negative correlation ($
+ho = -0.101$), confirming that thermodynamic metastability is often accompanied by mechanical softening.
+
+## 3. Machine Learning Model Performance and Validation
+A Random Forest classifier was employed, utilizing a KNN imputer for missing data. The model was evaluated using Repeated Stratified K-Fold Cross-Validation (5 folds, 10 repeats), prioritizing the Area Under the Precision-Recall Curve (AUPRC) to ensure high confidence in positive predictions.
+
+## 4. Feature Importance and the Physics of Mechanical Softening
+Permutation Feature Importance analysis highlights the following drivers:
+- `volume_per_atom` (0.122 $\pm$ 0.075): Dominant geometric factor.
+- `energy_above_hull` (0.038 $\pm$ 0.048): Key indicator of potential energy well depth.
+- `M_soc_proxy` (0.019 $\pm$ 0.043) and `dos_at_fermi` (0.015 $\pm$ 0.040): These features capture the electronic instability-driven softening, where spin-orbit coupling acts as a stabilizing mechanism by lifting band degeneracies.
+
+## 5. Inference and Screening of Metastable Candidates
+We screened 112 metastable TMD candidates using a dual-filter criterion: $P(\text{robust}) > 0.8$ and $E_{hull} < 0.05$ eV/atom. Five candidates were identified as promising targets:
+- **TaSe$_2$ (2H-like, mp-637232):** $E_{hull} = 0.00069$ eV/atom, $P = 0.950$.
+- **TaS$_2$ (3R, mp-16226):** $E_{hull} = 0.0024$ eV/atom, $P = 0.866$.
+- **TaS$_2$ (3R, mp-755523):** $E_{hull} = 0.0167$ eV/atom, $P = 0.848$.
+- **NiS$_2$ (Other, mp-2282):** $E_{hull} = 0.0152$ eV/atom, $P = 0.910$.
+- **NiS$_2$ (Other, mp-850131):** $E_{hull} = 0.0217$ eV/atom, $P = 0.880$.
+
+## 6. Conclusion
+The developed framework successfully maps the complex phase space of TMDs, providing a robust methodology to identify metastable materials that are both thermodynamically accessible and mechanically stable, thereby guiding future experimental synthesis.
+
+**Respond in exactly this format:**
+
+\\begin{REPORT}
+<REPORT>
+\\end{REPORT}
+
+In <REPORT>, put your report.
+
+###### PROMPT ENDS ########
+
+\begin{FEEDBACK}
+The current analysis provides a useful screening tool, but it suffers from significant\begin{COMMENTS}
+The analysis results are directly constrained by the dataset description regarding the availability of elastic methodological circularity and a lack of physical rigor in its target definition.
+
+**1. Methodological Weakness: Target properties. The dataset description explicitly states that elastic constants (`K_vrh`, `G_vrh`, etc.) are only available Definition**
+Defining `is_robust` as $G_{vrh}$ above the *phase-specific median* is problematic for 90 out of 202 materials because these calculations were not performed by the Materials Project for metastable structures. \begin{REPORT}
+### Summary: Electronic Phase-Space Mapping of Mechanical Robustness in
+
+This constraint limits the analysis in the following ways:
+1. **Selection Bias**: The training set for the Random. By normalizing within phases, you have effectively removed the most important structural information: that certain phases (e.g., TMDs
+
+**Project Status:** Completed initial classification framework for mechanical robustness in metastable TMDs.
+
+**Methodology & Assumptions:**
+- Forest classifier is restricted to the 90 materials for which elastic data exists (primarily stable or near-stable structures). Consequently **Target:** Binary classification of mechanical robustness (`is_robust`), defined as $G_{vrh}$ exceeding the phase-specific median within the training set (90 samples).
+- **Model:** Random Forest Classifier with KNN imputation for `dos_at_fermi, the model is trained on a subset that may not fully represent the structural or electronic diversity of the 112 metastable candidates it`.
+- **Features:** Included electronic (`d_band_filling`, `dos_at_fermi`, `e 2H vs. 1T) are intrinsically stiffer than others. You are training the model to find "the is tasked to predict.
+2. **Inference Uncertainty**: Because the model is trained on a population where elastic properties werefermi`, `M_soc_proxy`), structural (`volume_per_atom`, `c_a_ratio`), deemed "calculable" by the Materials Project, the extrapolation to the 112 metastable candidates—which were excluded from the original best of a bad bunch" rather than identifying materials that are mechanically robust in an absolute sense. 
+*   **Action:** and thermodynamic (`energy_above_hull`) descriptors.
+- **Constraints:** Class imbalance handled via Random Forest class weights; cross-validation (5-fold, 10 repeats) used to mitigate small sample size bias.
+
+**Key Findings:**
+- **Drivers of Stiffness:** `volume_per_atom` (negative correlation) and `efermi` (positive correlation) elastic calculations due to their instability—introduces significant uncertainty. The model's "mechanical viability" predictions for these candidates Re-run the analysis using a global threshold (e.g., the median of the entire 90-sample elastic are primary predictors.
+- **Softening Mechanisms:** Mechanical softening in metastable phases is linked to high `energy_above_hull` and dataset) or a physically motivated threshold (e.g., $G_{vrh} > 50$ GPa). This electronic instabilities, partially mitigated by spin-orbit coupling (`M_soc_proxy`).
+- **Screening Results:** Identified are based on features learned from a more stable subset, potentially failing to capture the specific physics of mechanical softening in highly metastable phases 5 high-priority metastable candidates with $P(\text{robust}) > 0.8$ and $E_{hull} will allow the model to learn that certain crystal systems are inherently more robust, which is a more valuable insight for experimentalists.
+\end{COMMENTS}
+
+ < 0.05$ eV/atom: TaSe₂ (mp-637232), TaS.
+
+**2. Feature Leakage and Redundancy**
+You included `volume_per_atom` and₂ (mp-16226, mp-755523), and NiS₂ (mp-2282, mp-850131).
+
+**Limitations & Uncertainties:**
+- **Data Sparsity:** Elastic `energy_above_hull` as features. While these are predictive, they are often consequences of the same electronic factors constants were only available for 90/202 materials; model performance relies on the assumption that the stable/ that determine $G_{vrh}$. Furthermore, using `phase` as a feature while simultaneously using phase-specific mednear-stable training set generalizes to the metastable population.
+- **Threshold Sensitivity:** The `is_robust` definition is relative to the training set median; absolute mechanical viability remains subject to experimental validation.
+- **Missing Data:** KNN imputation for `dos_atians for the target creates a high risk of overfitting to the specific labels of the training set.
+*   **Action:**_fermi` introduces potential noise in electronic descriptors for 16 materials.
+
+**Future Directions:**
+- Validate predicted candidates via high-fidelity DFT elastic constant calculations.
+- Incorporate explicit phonon stability criteria to refine the "mechanical viability" definition beyond Perform a feature importance analysis excluding `volume_per_atom` to see if the model can still identify robust candidates using purely electronic/ $G_{vrh}$.
+- Expand feature set to include explicit charge-density-wave (CDW) descriptors for distorted phases.
+\end{REPORT}
+
+compositional descriptors (`d_band_filling`, `M_soc_proxy`). If it cannot, your "mechanical viability" is simply a proxy for "density," which is trivial.
+
+**3. The "Metastable" Paradox**
+Your screening criteria ($E_{hull} < 0.05$ eV/atom) is a standard stability filter, but you have not addressed the *mechanical* stability of the candidates. A material can be thermodynamically metastable but mechanically unstable (e.g., negative phonon frequencies). 
+*   **Action:** Since you have `elastic_anisotropy` and `poisson_ratio` for the training set, check if your "robust" candidates exhibit extreme values in these metrics. High anisotropy often signals structural instability. Add a filter for `elastic_anisotropy` to your screening to ensure the predicted "robust" materials are not just dense, but also structurally sound.
+
+**4. Interpretation of Results**
+The identification of TaS₂ and NiS₂ is interesting, but these are well-studied systems. The model's reliance on `volume_per_atom` suggests it is essentially a "density-predictor." 
+*   **Action:** To move beyond trivial correlations, perform a "Leave-One-Metal-Out" cross-validation. If the model fails to predict robustness for a metal not seen in the training set, it is not learning the physics of TMD bonding; it is merely memorizing the properties of specific transition metals. This is critical for determining if your model can actually discover *new* materials or just re-rank known ones.
+
+**Summary of next steps:**
+1. Switch to a global $G_{vrh}$ threshold.
+2. Perform Leave-One-Metal-Out validation to test generalizability.
+3. Incorporate `elastic_anisotropy` as a secondary filter to avoid selecting materials that are "stiff" but structurally unstable.
+\end{FEEDBACK}
+
+
+###### PROMPT BEGINS ########
+Human: You are given three inputs:
+1) a dataset description,
+2) the current idea of a project,
+3) a report outlinig the results obtained from previous ideas and methods on the same dataset. 
+
+Your task is to undertand in detail the report, the things tried, and which one worked and which ones didnt work so well. 
+With that information, formulate an idea/hypothesis to carry out with the same dataset that will help understand an aspect of the problem better and can led to better performance on the results. 
+The idea/hypothesis needs to be something new and different to what has been done already.
+Note that your idea/hypothesis will be passed to a set of agents that will make a research plan with it, and that plan will be sent to another agents for writing and executing code.
+Note that your idea/hypothesis need to adhere to the constraints of the dataset. I.e. new data is not available.
+
+Data description:
+# Data Description: MX₂ Transition-Metal Dichalcogenides
+
+## Overview
+
+This dataset contains 202 binary MX₂ compounds (one transition metal M, one chalcogen X, in a 1:2 stoichiometric ratio) retrieved from the Materials Project database (https://materialsproject.org) using the `mp-api` Python client (v0.46.0). All values are the result of density functional theory (DFT) calculations performed by the Materials Project using the Vienna Ab initio Simulation Package (VASP) with the PBE generalized-gradient approximation exchange-correlation functional.
+
+The dataset covers 13 transition metals (M = Ti, Zr, Hf, V, Nb, Ta, Cr, Mo, W, Mn, Fe, Co, Ni) and 3 chalcogens (X = S, Se, Te), spanning 35 space groups and 7 crystal systems.
+
+---
+
+## File Location
+
+```
+/home/node/work/projects/materials_project_v1/tmd_data_enriched.csv
+```
+
+## Loading the Data
+
+```python
+import pandas as pd
+
+df = pd.read_csv("/home/node/work/projects/materials_project_v1/tmd_data_enriched.csv")
+print(df.shape)   # (202, 53)
+```
+
+No index column is stored. All columns are loaded directly.
+
+---
+
+## Column Descriptions
+
+### Identifiers
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `material_id` | str | Unique Materials Project identifier (e.g. `mp-27793`) |
+| `formula` | str | Reduced chemical formula (e.g. `NbSe2`, `MoS2`) |
+| `metal` | str | Transition metal element symbol (one of: Ti, Zr, Hf, V, Nb, Ta, Cr, Mo, W, Mn, Fe, Co, Ni) |
+| `chalcogen` | str | Chalcogen element symbol (one of: S, Se, Te) |
+
+### Crystal Structure
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `spacegroup_symbol` | str | — | Hermann-Mauguin space group symbol (e.g. `P6_3/mmc`, `P-3m1`) |
+| `spacegroup_number` | int | — | International space group number (1–230) |
+| `crystal_system` | str | — | Crystal system: Trigonal, Hexagonal, Orthorhombic, Cubic, Monoclinic, Tetragonal, or Triclinic |
+| `phase` | str | — | TMD polymorph classification derived from space group (see Phase Classification below) |
+| `volume` | float | Å³ | Total unit cell volume |
+| `nsites` | int | — | Number of atomic sites in the unit cell |
+| `volume_per_atom` | float | Å³/atom | Unit cell volume divided by number of sites |
+| `a`, `b`, `c` | float | Å | Lattice parameters (lengths) |
+| `alpha`, `beta`, `gamma` | float | degrees | Lattice parameters (angles) |
+| `c_a_ratio` | float | — | Ratio c/a of lattice parameters |
+
+### Thermodynamic Stability
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `energy_above_hull` | float | eV/atom | Energy above the convex hull. 0 = thermodynamically stable ground state; larger values indicate metastability |
+| `log1p_energy_above_hull` | float | — | log(1 + energy_above_hull); log-transformed stability for use in models |
+| `formation_energy_per_atom` | float | eV/atom | Formation energy per atom relative to elemental references; negative = exothermic formation |
+| `is_stable` | bool | — | True if the material lies on the convex hull (energy_above_hull = 0) |
+| `theoretical` | bool | — | True if the material has not been experimentally observed in the ICSD; False if it has been synthesized |
+
+### Electronic Structure
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `band_gap` | float | eV | DFT-computed electronic band gap. 0.0 = metallic |
+| `efermi` | float | eV | Fermi energy in the DFT calculation (absolute, not relative to VBM) |
+| `dos_at_fermi` | float | states/eV | Total electronic density of states at the Fermi level, computed from the DFT projected DOS. Missing for 16 materials where no DOS calculation is available in MP. |
+
+### Magnetic Properties
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `magnetic_ordering` | str | DFT-relaxed magnetic ground state: NM (non-magnetic), FM (ferromagnetic), AFM (antiferromagnetic), FiM (ferrimagnetic) |
+| `total_magnetization` | float | Total magnetic moment of the unit cell in μ_B |
+
+### Mechanical / Elastic Properties
+
+Available for 90/202 materials (only computed by MP for stable or near-stable structures).
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `K_vrh` | float | GPa | Bulk modulus (Voigt-Reuss-Hill average) |
+| `G_vrh` | float | GPa | Shear modulus (Voigt-Reuss-Hill average) |
+| `poisson_ratio` | float | — | Homogeneous Poisson ratio |
+| `elastic_anisotropy` | float | — | Universal elastic anisotropy index |
+| `debye_temperature` | float | K | Debye temperature, estimated from elastic constants |
+
+### Atomic / Elemental Descriptors
+
+All values are fixed per element and do not depend on the specific crystal structure.
+
+| Column | Type | Units | Description |
+|--------|------|-------|-------------|
+| `M_val` | int | — | Valence electron count of the metal (e.g. Mo → 6, Nb → 5) |
+| `M_Z` | int | — | Atomic number of the metal |
+| `M_en` | float | — | Pauling electronegativity of the metal |
+| `M_ie1` | float | eV | First ionization energy of the metal atom |
+| `M_atomic_radius` | int | pm | Covalent atomic radius of the metal (Cordero et al. 2008) |
+| `M_group` | int | — | Periodic table group of the metal (4–10) |
+| `M_period` | int | — | Periodic table period of the metal (4, 5, or 6) |
+| `M_soc_proxy` | int | — | Spin-orbit coupling strength proxy: Z² of the metal |
+| `X_en` | float | — | Pauling electronegativity of the chalcogen |
+| `X_ie1` | float | eV | First ionization energy of the chalcogen atom |
+| `X_atomic_radius` | int | pm | Covalent atomic radius of the chalcogen (Cordero et al. 2008) |
+| `X_period` | int | — | Periodic table period of the chalcogen (3 = S, 4 = Se, 5 = Te) |
+| `en_difference` | float | — | X_en − M_en; proxy for M–X bond ionicity |
+| `bond_radius_sum` | int | pm | M_atomic_radius + X_atomic_radius; expected M–X bond length |
+| `d_count_m4plus` | int | — | d-electron count of the metal assuming M⁴⁺ oxidation state: M_val − 4 |
+| `d_band_filling` | float | — | d_count_m4plus / 10; fractional filling of the 10-electron d-band |
+
+### Known Experimental Superconductivity (Literature)
+
+These columns are populated only for formulas that appear in the experimental literature with a measured superconducting transition temperature. All other rows are NaN. Tc values are phase-specific in principle; the assignment here is formula-level.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `Tc_exp_K` | float | Experimental superconducting transition temperature in Kelvin |
+| `Tc_phase` | str | Polymorph phase for which Tc was measured (e.g. `2H`, `1T`) |
+| `Tc_ref` | str | Short literature reference key |
+| `is_known_SC` | bool | True if a positive Tc_exp_K is available for this formula |
+
+---
+
+## Phase Classification
+
+The `phase` column classifies each material into a standard TMD polymorph based on its space group number:
+
+| Phase | Space group(s) | Coordination | Description |
+|-------|----------------|--------------|-------------|
+| `2H` | 194 (P6₃/mmc) | Trigonal prismatic | Hexagonal, 2-layer repeat. Common semiconducting or metallic phase for Groups V–VI. |
+| `2H-like` | 176, 186, 187 | Trigonal prismatic-like | Hexagonal space groups structurally similar to 2H. |
+| `1T` | 164 (P-3m1) | Octahedral | Trigonal, 1-layer repeat. Typical for Group IV metals. |
+| `3R` | 160, 166 (R3m, R-3m) | Trigonal prismatic | Rhombohedral, 3-layer repeat. |
+| `1T'` | 11, 12, 63, 65 (C2/m, P2₁/m, Cmce, Cmmm) | Distorted octahedral | Monoclinic distortion of 1T. Associated with Weyl semimetal phases. |
+| `CDW/distorted` | 38, 55, 58, 62 | Distorted | Orthorhombic distortions, often associated with charge-density-wave order. |
+| `cubic` | 216, 221, 225, 229 | Mixed | Rocksalt-like or zincblende cubic structures. |
+| `other` | all remaining | — | 66 materials with space groups outside the above classifications. Crystal system is available for these. |
+
+---
+
+## Dataset Statistics
+
+| Property | Value |
+|----------|-------|
+| Total materials | 202 |
+| Unique formulas | 37 |
+| Metals (M) | Ti, Zr, Hf, V, Nb, Ta, Cr, Mo, W, Mn, Fe, Co, Ni (13 total) |
+| Chalcogens (X) | S, Se, Te (3 total) |
+| Metallic (band_gap = 0) | 152 |
+| Thermodynamically stable (is_stable) | 46 |
+| Experimentally observed (theoretical = False) | 77 |
+| With DOS at Fermi | 186/202 |
+| With elastic constants | 90/202 |
+| With known experimental Tc | 80 rows (10 unique formulas) |
+| Magnetic ordering — NM / FM / FiM / AFM | 120 / 69 / 9 / 4 |
+
+---
+
+## Missing Values
+
+| Column | Missing count | Reason |
+|--------|--------------|--------|
+| `dos_at_fermi` | 16 | No DOS calculation available in MP for these material IDs |
+| `K_vrh`, `G_vrh`, `poisson_ratio`, `elastic_anisotropy`, `debye_temperature` | 112 | Elasticity calculations not performed by MP for metastable structures |
+| `Tc_exp_K`, `Tc_phase`, `Tc_ref` | ~122 | No experimental Tc reported in literature for that formula |
+
+---
+
+## Data Provenance
+
+- *Structural and thermodynamic data*: `MPRester.materials.summary.search` (mp-api v0.46.0), retrieved 2026-04-14
+- *Density of states*: `MPRester.get_dos_by_material_id`, retrieved 2026-04-14
+- *Magnetic ordering and formation energy*: `MPRester.materials.summary.search`, retrieved 2026-04-14
+- *Elastic constants*: `MPRester.elasticity.search`, retrieved 2026-04-14
+- *Atomic properties* (electronegativity, ionization energy, atomic radius): standard literature values (Pauling scale; Cordero et al. 2008 for radii; NIST Atomic Spectra Database for IEs)
+- *Experimental Tc values*: compiled from primary literature (Morris 1972, Revolinsky 1965, Wilson 1975, DiSalvo 1973, Morosan 2006, Costanzo 2016, Shi 2015, Lu 2015, Ye 2012, Qi 2016, Kang 2015)
+
+Current idea: 
+**Title: Electronic Phase-Space Mapping of Mechanical Robustness in Metastable TMDs**
+
+This study develops a binary classification framework to identify mechanically robust metastable TMDs by defining a stability boundary in the feature space of `d_band_filling`, `en_difference`, and `dos_at_fermi`. Rather than regressing continuous elastic constants, the model uses the 90-sample elastic dataset to characterize the electronic signatures of mechanical softening, specifically targeting materials with $G_{vrh}$ exceeding the median threshold of the stable population. By incorporating `magnetic_ordering` and `M_soc_proxy` as critical features, the model accounts for spin-dependent structural distortions—such as Jahn-Teller effects—that suppress mechanical stability in high-density-of-states phases. The classification objective is to screen the 112 metastable candidates for "mechanical viability," using a random forest ensemble to handle the non-linear interaction between crystal symmetry and electronic filling. The final output is a probability map that filters metastable TMDs, isolating those with high predicted shear moduli to prioritize candidates for experimental synthesis.
+
+Report with previous results:
+
+
+Iteration 0:
+### Summary: Electronic Phase-Space Mapping of Mechanical Robustness in TMDs
+
+**Project Status:** Completed initial classification framework for mechanical robustness in metastable TMDs.
+
+**Methodology & Assumptions:**
+- **Target:** Binary classification of mechanical robustness (`is_robust`), defined as $G_{vrh}$ exceeding the phase-specific median within the training set (90 samples).
+- **Model:** Random Forest Classifier with KNN imputation for `dos_at_fermi`.
+- **Features:** Included electronic (`d_band_filling`, `dos_at_fermi`, `efermi`, `M_soc_proxy`), structural (`volume_per_atom`, `c_a_ratio`), and thermodynamic (`energy_above_hull`) descriptors.
+- **Constraints:** Class imbalance handled via Random Forest class weights; cross-validation (5-fold, 10 repeats) used to mitigate small sample size bias.
+
+**Key Findings:**
+- **Drivers of Stiffness:** `volume_per_atom` (negative correlation) and `efermi` (positive correlation) are primary predictors.
+- **Softening Mechanisms:** Mechanical softening in metastable phases is linked to high `energy_above_hull` and electronic instabilities, partially mitigated by spin-orbit coupling (`M_soc_proxy`).
+- **Screening Results:** Identified 5 high-priority metastable candidates with $P(\text{robust}) > 0.8$ and $E_{hull} < 0.05$ eV/atom: TaSe₂ (mp-637232), TaS₂ (mp-16226, mp-755523), and NiS₂ (mp-2282, mp-850131).
+
+**Limitations & Uncertainties:**
+- **Data Sparsity:** Elastic constants were only available for 90/202 materials; model performance relies on the assumption that the stable/near-stable training set generalizes to the metastable population.
+- **Threshold Sensitivity:** The `is_robust` definition is relative to the training set median; absolute mechanical viability remains subject to experimental validation.
+- **Missing Data:** KNN imputation for `dos_at_fermi` introduces potential noise in electronic descriptors for 16 materials.
+
+**Future Directions:**
+- Validate predicted candidates via high-fidelity DFT elastic constant calculations.
+- Incorporate explicit phonon stability criteria to refine the "mechanical viability" definition beyond $G_{vrh}$.
+- Expand feature set to include explicit charge-density-wave (CDW) descriptors for distorted phases.
+        
+
+**Respond in exactly this format:**
+
+\\begin{HYPOTHESIS}
+<HYPOTHESIS>
+\\end{HYPOTHESIS}
+
+In <HYPOTHESIS>, put idea/hypothesis.
+
+
+###### PROMPT ENDS ########
+
+\begin{HYPOTHESIS}
+The mechanical robustness of TMDs is not merely a function of electronic density of states, but is fundamentally constrained by the "structural frustration" induced by the mismatch between the metal's d-electron count and the chalcogen's electronegativity, which dictates the propensity for Peierls-like distortions. I hypothesize that the mechanical softening observed in metastable TMDs is driven by the coupling between the `d_band_filling` and the `en_difference`, where specific "islands" of stability exist at integer or half-integer d-band fillings. By constructing a "Structural Frustration Index" (SFI) defined as the interaction term between `d_band_filling` and `en_difference`, and using this as a primary feature in a multi-task learning model that simultaneously predicts `G_vrh` and the presence of `CDW/distorted` phases, we can identify metastable materials that are mechanically robust due to structural locking rather than just electronic stability. This approach moves beyond simple binary classification of stiffness by explicitly modeling the competition between lattice distortion (which lowers energy) and elastic modulus (which resists deformation), allowing us to identify "stiff-distorted" phases that were previously overlooked by models focusing solely on the median shear modulus.
+\end{HYPOTHESIS}
+
