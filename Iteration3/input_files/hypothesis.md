@@ -1,0 +1,8 @@
+The previous iterations have successfully established a binary classification framework for mechanical robustness, identifying that electronic descriptors like `d_band_filling` and `dos_at_fermi` are primary drivers, while `M_soc_proxy` is largely negligible. However, the persistent performance gap in Nb and Mo-based compounds suggests that the current scalar descriptors fail to capture the specific structural-electronic coupling characteristic of Charge Density Wave (CDW) phases. 
+
+**Hypothesis:** The mechanical instability in metastable TMDs is not merely a function of electronic density at the Fermi level, but is specifically modulated by the "structural frustration" induced by the mismatch between the `c_a_ratio` and the `d_band_filling`. I hypothesize that by constructing a "frustration index" feature—defined as the interaction term between the deviation of `c_a_ratio` from the ideal hexagonal packing (1.633) and the `d_band_filling`—we can explicitly model the lattice-electronic coupling that triggers CDW-related softening. 
+
+**Proposed Task:** 
+1. Engineer a new feature: `frustration_index = abs(c_a_ratio - 1.633) * d_band_filling`.
+2. Perform a comparative analysis using a Gradient Boosting Classifier (e.g., XGBoost) instead of Random Forest to better capture the non-linear interaction between this new index and the existing `dos_at_fermi`.
+3. Evaluate if this feature specifically improves the AUPRC for the previously problematic Nb and Mo clusters, thereby validating that the model can now distinguish between "mechanically soft due to CDW" and "mechanically soft due to structural instability."
