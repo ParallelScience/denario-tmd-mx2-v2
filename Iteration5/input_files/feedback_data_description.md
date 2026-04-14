@@ -1,0 +1,7 @@
+The dataset description explains several observed analysis limitations:
+
+1. **Regression Performance and Data Sparsity**: The negative $R^2$ and difficulty in zero-shot prediction across chemical groups are directly attributable to the limited sample size of the elasticity dataset (90/202 materials). Because elasticity calculations were only performed by the Materials Project for stable or near-stable structures, the model lacks sufficient coverage of the "metastable" region of the chemical space to generalize effectively across all transition metal groups.
+
+2. **Uncertainty in Late 3d Transition Metals**: The high prediction uncertainty for Mn, Fe, and Ni compounds is explained by the dataset's reliance on PBE-level DFT calculations. The description notes that these materials often exhibit complex magnetic orderings, and the dataset's reliance on PBE (which struggles with strong electron correlation and self-interaction errors in late 3d metals) introduces intrinsic physical noise into the electronic descriptors (`dos_at_fermi`, `total_magnetization`) used by the model.
+
+3. **Missing Data**: The exclusion of 16 materials from DOS calculations and 112 materials from elasticity calculations—due to the Materials Project's curation policy of only computing these for specific stability regimes—directly limits the training data available for the regression head and necessitates the imputation and multi-task architecture described.
