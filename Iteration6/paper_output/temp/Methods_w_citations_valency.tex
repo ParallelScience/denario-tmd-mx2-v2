@@ -1,0 +1,38 @@
+\documentclass[]{article}
+
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{natbib}
+\usepackage{graphicx} 
+
+
+\begin{document}
+
+\subsection{Dataset and feature engineering}
+The foundation of our study is a dataset comprising 202 transition-metal dichalcogenides (TMDs), for which structural and electronic properties were pre-computed \citep{muller2023open,Ramanathan_2023,chen2021leveraginglargescalecomputationaldatabase}. The primary target variable for our machine learning model is Pugh's ratio, defined as the ratio of the shear modulus to the bulk modulus ($G/K$) \citep{dejong2018statistical,malakar2022datadrivenmachinelearningpredict,Ali_2024}. We use the Voigt-Reuss-Hill (VRH) averages for both moduli, yielding the target variable $G_{vrh}/K_{vrh}$. Elastic tensor data required to compute this ratio were available for a subset of 90 materials \citep{dejong2018statistical,Choudhary_2020,muller2023open}.
+
+The model was trained on a set of physically-motivated descriptors designed to capture the key drivers of mechanical stability \citep{Pham_2018,tawfik2022naturallymeaningfulefficientdescriptorsmachine,Tawfik_2022,Gajera_2022,Willatt_2018,Mukhamedov_2025,Hasan_2025,Liu_2024}. These features include: the density of states at the Fermi level (\texttt{dos\_at\_fermi}), which quantifies the metallic character of the material \citep{Georgescu_2021}; the ratio of the out-of-plane to in-plane lattice parameters (\texttt{c\_a\_ratio}), which describes structural anisotropy \citep{singh2025linkingquantummechanicalfeatures,Hasan_2025,Liu_2024}; the d-band filling of the transition metal (\texttt{d\_band\_filling}) \citep{Pham_2018,Gajera_2022,Willatt_2018}; and a proxy for spin-orbit coupling effects (\texttt{M\_soc\_proxy}), taken as the square of the transition metal's atomic number, $Z^2$. Categorical features representing the crystal phase (e.g., 1T, 2H, 3R) were one-hot encoded \citep{singh2025linkingquantummechanicalfeatures,Hasan_2025,mizzi2026leveragingmechanicalresonancesselection}.
+
+A small fraction of the dataset (16 materials) was missing values for \texttt{dos\_at\_fermi}. We handled this using mean imputation, where the missing values were filled with the mean of the feature calculated strictly from the training data within each cross-validation fold. An alternative strategy, which involved adding a binary indicator variable (\texttt{is\_dos\_missing}) to flag imputed samples, was tested but ultimately discarded as it slightly degraded model performance. Prior to screening, the dataset was filtered to remove 4 materials with extreme \texttt{dos\_at\_fermi} values (greater than three standard deviations from the mean) to prevent the model from extrapolating into unphysical, highly metallic regimes.
+
+\subsection{Machine learning model}
+Our modeling strategy initially explored a shallow neural network, but this approach failed to generalize, yielding a coefficient of determination ($R^2$) below 0.1 during preliminary cross-validation. We therefore pivoted to a Random Forest regressor, an ensemble method known for its robustness on small, tabular datasets with complex, non-linear feature interactions. The final model is an ensemble of decision trees trained to predict $G_{vrh}/K_{vrh}$ from the engineered electronic and structural descriptors.
+
+To provide robust uncertainty estimates for our predictions, we employed a Deep Ensemble technique \citep{Tavazza_2021,tavazza2021uncertainty,varivoda2022materialspropertypredictionuncertainty,jacobs2024machinelearningmaterialsproperties,Li_2024,Schreck_2024,dale2025activelearningfailsuncalibrated,korolev2022universal,sun2021datadrivendiscoveryinterpretablecausal}. This involved training 10 independent Random Forest models, each initialized with a different random seed. The final prediction for a given material is the mean of the predictions from these 10 models, and the associated epistemic uncertainty is quantified by the standard deviation of these predictions .
+
+\subsection{Model evaluation and interpretability}
+The model's ability to extrapolate to new chemical families was rigorously assessed using a Leave-One-Group-Out (LOGO) cross-validation scheme. In this procedure, the dataset was partitioned into groups based on the transition metal element. For each fold, the model was trained on all groups except one, which was held out as the test set. This stringent protocol tests the model's capacity to predict the mechanical properties of TMDs containing a metal it has never seen during training.\citep{Li_2023,Karunaratne_2025} Model performance was quantified using the Mean Absolute Error (MAE) and the coefficient of determination ($R^2$).\citep{Borg_2023}
+
+To gain physical insight into the model's decision-making process, we employed SHapley Additive exPlanations (SHAP) \citep{aas2020explainingindividualpredictionsfeatures,redelmeier2020explainingpredictivemodelsmixed,heskes2020causalshapleyvaluesexploiting,campbell2021exactshapleyvalueslocal,Nohara_2022,olsen2023precisionindividualshapleyvalue,Zhao_2024,whitehouse2026statisticalinferencelearningshapley,lin2026comparativeanalysismachinelearning}. This technique assigns an importance value to each feature for every individual prediction, revealing not only which features are most influential overall but also how they interact to drive the predicted outcome \citep{aas2020explainingindividualpredictionsfeatures,heskes2020causalshapleyvaluesexploiting,campbell2021exactshapleyvalueslocal,Nohara_2022,olsen2023precisionindividualshapleyvalue,Zhao_2024,whitehouse2026statisticalinferencelearningshapley}. The SHAP analysis was performed on the model trained on the full 90-sample subset containing elastic data.
+
+\subsection{Screening and candidate prioritization}
+The trained Deep Ensemble model was used to screen a library of 112 theoretical metastable TMDs \citep{liu2024high,samanta2022rapidscreeninghighthroughputground}. To rank these candidates and identify the most promising targets for synthesis, we defined a composite viability score, $S$, which balances predicted robustness with prediction confidence: \citep{xin2025bridgingtheoryexperimentmaterials,Lee_2024,Zhang_2026,jang2021structurebased,song2025accurate,Niyongabo_Rubungo_2025}
+\begin{equation}
+S = \frac{\text{Predicted}(G/K)}{\text{Uncertainty}}
+\end{equation}
+where the uncertainty is the standard deviation of the ensemble's predictions \citep{Dutschmann_2023}. This score prioritizes materials predicted to have a high Pugh's ratio with low disagreement among the ensemble models \citep{tran2020methodscomparinguncertaintyquantifications}.
+
+The final list of prioritized candidates was generated by applying a filter to this ranked list \citep{Das_2025}. We selected only materials that were designated as purely theoretical and possessed a thermodynamic accessibility within a realistic window for experimental synthesis, defined as having an energy above the convex hull ($E_{hull}$) of 0.05 eV/atom or less \citep{Anelli_2018,prein2025synthesizabilityguidedpipelinematerialsdiscovery,schlesinger2026thermodynamicassessmentmachinelearning,McDermott_2023}.
+
+\end{document}
+                
